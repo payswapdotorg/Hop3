@@ -99,11 +99,13 @@ jobs:
 
       # Advisory on purpose: 1605 files already fail fmt:check on the imported
       # baseline (docs/handoffs/evidence/baseline-import-verification.md; the
-      # fifth TL session re-confirmed the drift on 2026-11-12). Reformatting
-      # them would be an unrelated repo-wide reformat upstream never asked for
-      # (HOP3_RULES §8), so the step stays visible but non-blocking until
-      # maintainers remediate the drift. It still fails loudly on NEW files
-      # drifting — visible as an orange warning annotation on the run.
+      # fifth TL session re-confirmed the drift on 2026-11-12, and the runner
+      # reproduced the identical count). Reformatting them would be an
+      # unrelated repo-wide reformat upstream never asked for (HOP3_RULES §8),
+      # so the step stays visible but non-blocking until maintainers remediate
+      # the drift. The step is marked failed-but-allowed in the run UI and the
+      # full file list is in the step log — it still surfaces new drift instead
+      # of silently passing.
       - name: "Format check (advisory — pre-existing upstream drift)"
         run: pnpm run fmt:check
         continue-on-error: true
