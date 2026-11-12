@@ -54,7 +54,20 @@ jobs:
           cache: pnpm
 
       - name: "Bootstrap (README install path — install + runtime prep + build:bootstrap)"
-        run: pnpm bootstrap
+        # Observed on the first run (2026-11-12): ERR_PNPM_ENOENT rename
+        # 'node_modules/tsup/node_modules/_tmp_*' -> 'node_modules/tsup/node_modules/esbuild'
+        # — a transient pnpm hoisted-linker race while concurrent native
+        # postinstall scripts (node-pty, esbuild, cpu-features, electron) run
+        # on fast multicore runners. Retry is bounded and each retry emits a
+        # visible warning annotation, so a deterministic failure (three
+        # identical failures) still fails the job loudly.
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm bootstrap; then exit 0; fi
+            echo "::warning::pnpm bootstrap attempt ${attempt} failed — retrying (known hoisted-linker ENOENT flake)"
+            sleep 5
+          done
+          exit 1
 
       - name: Node version assertion (repository's own CI script)
         run: pnpm run ci:assert-node
