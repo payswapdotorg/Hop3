@@ -4,7 +4,7 @@
 
 Its first product outcome is to help people discover and pursue legitimate ways to earn extra income: local shifts, paid research, surveys, review and evaluation programmes, translation, transcription, AI/data tasks, testing, fieldwork and conventional freelance gigs. It will also grow to help gig posters find, compare and coordinate suitable individuals and teams.
 
-> **Repository status (2026-11-12):** the product charter and Stage 1 implementation handoff are established. The repository was initially empty and does not yet contain the ZCode source tree or a runnable Hop3 application. Stage 1 begins by importing the pinned upstream baseline while preserving this repository's product specifications.
+> **Repository status (2026-11-12):** the pinned upstream ZCode baseline has been imported (see *Upstream foundation* below). The product charter, Stage 1 handoff and an Earn reference implementation (porting material, not the product shell) exist on `stage1/reference-implementation`. Hop3 product features are built additively on the ZCode application per [HOP3_RULES.md](HOP3_RULES.md) §3.
 
 ## Repository authority
 
@@ -44,11 +44,12 @@ Stage 1 is not a promise of earnings, a global gig marketplace, an escrow produc
 
 ## Upstream foundation
 
-- Upstream repository: [zai-org/ZCode](https://github.com/zai-org/ZCode)
-- Pinned baseline: [ZCode v3.18.0 source-sync commit](https://github.com/zai-org/ZCode/commit/b95ebaffeab641907b38652f45c1502bd762972d)
-- Pinned upstream SHA: b95ebaffeab641907b38652f45c1502bd762972d
+- Upstream repository (remote `upstream`): [zai-org/ZCode](https://github.com/zai-org/ZCode)
+- Imported pinned baseline: [ZCode v3.18.0 source-sync commit](https://github.com/zai-org/ZCode/commit/b95ebaffeab641907b38652f45c1502bd762972d) `b95ebaffeab641907b38652f45c1502bd762972d`, imported into this repository as a reviewed merge of unrelated histories that preserves the upstream commit graph, [LICENSE](LICENSE), [NOTICE.md](NOTICE.md), [AGENTS.md](AGENTS.md) and all contributor guidance, together with this repository's product specs and [HOP3_RULES.md](HOP3_RULES.md).
+- Upstream usage/development docs: [README (English)](README.en.md) · [Upstream README (简体中文)](https://github.com/zai-org/ZCode/blob/main/README.md) · [mise.toml](mise.toml) (tool versions: Node 24.14.0, pnpm 10.33.2) · [apps/zcode-cli usage guide](apps/zcode-cli/docs/usage/README.md) · developer docs app (`pnpm dev:docs`, `apps/dev-docs`).
+- Upstream engineering gates (run from the repository root): `pnpm bootstrap` (install + bootstrap), `pnpm typecheck`, `pnpm lint` (oxlint + session-control boundary), `pnpm fmt:check` (oxfmt), `pnpm test:architecture`, `pnpm db:schema:check`, desktop/web E2E via `pnpm test:e2e` (see [README (English)](README.en.md) for the full matrix).
 
-The first Stage 1 engineering task is to import this commit and retain the upstream remote/history. Do not treat an unpinned moving branch as a reproducible baseline. Record every subsequent upstream adoption in an ADR and update the baseline manifest.
+Do not treat an unpinned moving branch as a reproducible baseline. Record every subsequent upstream adoption in an ADR and update the baseline manifest.
 
 ## How to work
 

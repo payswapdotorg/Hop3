@@ -1,6 +1,6 @@
 # TL handoff: Stage 1 — Verified earning-opportunity discovery
 
-- **Status:** Ready for implementation
+- **Status:** In progress — pinned ZCode baseline imported (2026-11-12); see "Status update" at the end of this document
 - **Created:** 2026-11-12
 - **Owning repository:** payswapdotorg/Hop3
 - **Normative references:** [PRODUCT](../PRODUCT.md), [ARCHITECTURE](../ARCHITECTURE.md), [DOMAIN-MODEL](../DOMAIN-MODEL.md), [CONNECTORS](../CONNECTORS.md), [ROADMAP](../ROADMAP.md), [ADR-0001](../adr/0001-source-of-truth-and-zcode-foundation.md), [ADR-0002](../adr/0002-earn-first-mvp-and-policy-aware-connectors.md)
@@ -230,3 +230,13 @@ The final Stage 1 report must include:
 - Remaining known issues and the next smallest implementation slice.
 
 A handoff is complete only when the product can be exercised end to end and evidence is in the repository. A scaffold or green report alone is not acceptance.
+
+## 11. Status update — 2026-11-12 (TL sandbox session)
+
+Section 3 (first task) has been executed; feature work continues against the imported baseline.
+
+- **Pinned upstream import:** zai-org/ZCode @ `b95ebaffeab641907b38652f45c1502bd762972d` (v3.18.0) imported on branch `stage1/zcode-baseline-import` as merge commit `c4f92a8b9f2e5a58b34739c68bf4623d261d30da` (parents: `f38d3216` Hop3 docs baseline + `b95ebaff` upstream). Upstream commit graph, `LICENSE`, `NOTICE.md`, `AGENTS.md` and all contributor guidance preserved; Hop3 specs and `HOP3_RULES.md` retained; root `README.md` resolved per section 3.6; upstream remote kept configured.
+- **Source map delivered:** `docs/architecture/UPSTREAM-MAP.md` — every path verified against the imported tree (navigation/shell, composer + prefill handoff, sessions, plugin slots/lifecycle, remote MCP + OAuth, scheduler, permissions/approvals, SQLite persistence, E2E, RPC service boundary).
+- **Baseline gates:** install PASS; `@zcode/session-control` typecheck PASS; lint PASS (0 errors, 538 pre-existing warnings); architecture governance 61/61 PASS; SQLite schema contract 8/8 PASS; full multi-project `tsc -b` BLOCKED by sandbox memory (OOM 137); `fmt:check` FAILED in sandbox (suspected oxfmt version drift; deliberately not remediated to avoid an unrelated repo-wide reformat); workspace build and desktop/web E2E NOT RUN in the sandbox — CI obligations. Full record with logs: `docs/handoffs/evidence/baseline-import-verification.md`.
+- **Earn surface (D2–D6):** a complete Stage 1 Earn reference implementation (Next.js 16 + Prisma against the frozen domain contracts) plus its acceptance evidence exists on branch `stage1/reference-implementation` (`docs/handoffs/STAGE-1-EVIDENCE.md` there; earner-journey acceptance tests 1–12 verified in-browser, zero console errors). It is explicitly **porting material, not the product shell** (HOP3_RULES §3): the port into the imported ZCode shell hangs off the mapped extension points (new tab kind in `tabStore`, an `@zcode/services` service for the domain, `tasksDatabase` migrations, the existing MCP/OAuth path for Upwork/Fiverr, the cron scheduler for source freshness, `requestComposerTextInsert` for the D6 composer handoff).
+- **Next smallest slice:** register the Hop3 Earn service + persistence migrations inside the imported tree and add the Earn tab, starting from UPSTREAM-MAP.md extension points; then run the upstream CI gates (typecheck, build, desktop/web E2E) on the port.
