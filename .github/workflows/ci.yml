@@ -119,16 +119,15 @@ jobs:
         run: pnpm run build
 
   # The upstream-documented Docker demo path (root command `pnpm
-  # test:e2e:container` → scripts/test-desktop-e2e-container.sh, default
-  # preset): builds Dockerfile.desktop-e2e (node:24.14.0-bookworm + Electron/
-  # Xvfb/dbus deps + frozen-lockfile install), prefetches the matching
-  # Chromedriver, then runs five replay-admitted specs inside the container
-  # with `--network none` (E2E_PROVIDER_HTTP_MODE=replay) — headless boot,
-  # UI smoke (v4 session pane + composer), e2ecase regression, replay-based
-  # upstream validation, and one ui-shell navigation spec. No credentials and
-  # no live network are used by the test itself (capture mode is opt-in and
-  # requires an API key by design). This exercises the desktop Electron shell
-  # end to end; the release-track matrix stays a maintainer duty.
+  # test:e2e:container` → scripts/test-desktop-e2e-container.sh) on
+  # ubuntu-latest: builds Dockerfile.desktop-e2e (node:24.14.0-bookworm +
+  # Electron/Xvfb/dbus deps + frozen-lockfile install), prefetches the matching
+  # Chromedriver, then runs the replay-safe portion of the default preset
+  # inside the container with `--network none` (E2E_PROVIDER_HTTP_MODE=replay)
+  # — headless boot, UI smoke (v4 session pane + composer), e2ecase regression,
+  # and one ui-shell navigation spec. No credentials and no live network are
+  # used by the tests. This exercises the desktop Electron shell end to end;
+  # the release-track matrix stays a maintainer duty.
   desktop-e2e-container:
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -151,7 +150,21 @@ jobs:
           # to run exactly like this.
           fetch-depth: 1
 
-      - name: "Run desktop E2E container demo (default preset, replay-isolated)"
+      - name: "Run desktop E2E container demo (replay-safe specs, replay-isolated)"
+        # E2E_SPEC is the script's own documented spec-selection knob. The value
+        # below is DEFAULT_E2E_SPEC verbatim minus one entry:
+        # infrastructure/smoke/upstream-provider.test.ts. That spec is hardcoded
+        # to capture mode by resolveUpstreamE2EHttpModeForWorker — it validates
+        # the REAL upstream provider and therefore requires E2E_PROVIDER_API_KEY
+        # plus live network (capture mode is opt-in by design). Observed on the
+        # first run (2026-11-12): under replay isolation it fails with
+        # "Manual review defaults to capture" and "没有捕获到 上游 请求" while
+        # the other four specs pass. It stays a credential-gated maintainer
+        # check; the conversation-session-verified / plugins-verified container
+        # presets (replay-admitted specs) are a natural follow-up for deeper
+        # coverage.
+        env:
+          E2E_SPEC: "./test/e2e/infrastructure/smoke/container-boot.test.ts,./test/e2e/infrastructure/smoke/smoke.test.ts,./test/e2e/infrastructure/smoke/e2ecase-regression.test.ts,./test/e2e/ui-shell/navigation/task-list-archive-confirmation.test.ts"
         run: bash scripts/test-desktop-e2e-container.sh
 
       - name: Upload E2E artifacts (reports, network capture, perf samples)
@@ -160,5 +173,9 @@ jobs:
         with:
           name: desktop-e2e-artifacts
           path: packages/desktop/.e2e-artifacts/
+          # The artifact root is a dot-directory (.e2e-artifacts); the action's
+          # default include-hidden-files=false silently matched nothing on the
+          # first run even though the bind mount had produced the files.
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
