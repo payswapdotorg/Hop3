@@ -25,6 +25,7 @@ At handoff creation:
 - payswapdotorg/Hop3 was empty (size 0, no code, no prior commits) before the initial README bootstrap.
 - The initial README commit is b94fd82c4bc3373783fbf7df7e881e8834020a43.
 - The product specs and handoff are merged into main in PR #1; source-of-truth baseline commit: 10f70ef8687e37b7aca3675f1a511e9787b3b929.
+- Implementation tracker: [GitHub Issue #2](https://github.com/payswapdotorg/Hop3/issues/2). This issue tracks work only; this handoff and its linked specs remain authoritative.
 - The pinned upstream ZCode source is b95ebaffeab641907b38652f45c1502bd762972d, identified as v3.18.0, source sync 2026-11-11.
 - There is not yet a Hop3 codebase to test. Do not claim runtime verification until the upstream import has happened.
 
