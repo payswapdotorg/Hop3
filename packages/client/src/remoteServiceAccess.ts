@@ -60,6 +60,7 @@ import {
   ISettingsSyncService,
   IFeedbackService,
   IPromptAttachmentTransferService,
+  IEarnService,
   IWindowControllerService,
   IWindowProjectService,
   IWindowRemoteProjectService,
@@ -142,6 +143,8 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly settingsSyncService: ISettingsSyncService;
   readonly feedbackService: IFeedbackService;
   readonly promptAttachmentTransferService: IPromptAttachmentTransferService;
+  /** Hop3 Earn 域服务；未注册该 channel 的 host 可不提供。 */
+  readonly earnService: IEarnService;
 
   constructor(
     channelClient: IChannelClient,
@@ -378,6 +381,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
     );
     this.promptAttachmentTransferService = ProxyChannel.toService<IPromptAttachmentTransferService>(
       channelClient.getChannel(IPromptAttachmentTransferService.channelName),
+    );
+    this.earnService = ProxyChannel.toService<IEarnService>(
+      channelClient.getChannel(IEarnService.channelName),
     );
   }
 }
