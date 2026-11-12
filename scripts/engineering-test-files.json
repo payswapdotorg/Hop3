@@ -167,5 +167,9 @@
   "packages/zcode-server-cli/test/tsupConfig.test.ts",
   "packages/zcode-server-cli/test/verifyRemoteSshTarget.test.ts",
   "packages/desktop/test/credential-keyring-assets.test.ts",
-  "packages/desktop/test/stdioTapCredentialRedaction.test.ts"
+  "packages/desktop/test/stdioTapCredentialRedaction.test.ts",
+  "packages/services/src/hop3-earn/hop3EarnSchema.test.ts",
+  "packages/services/src/hop3-earn/hop3EarnDomain.test.ts",
+  "packages/services/src/hop3-earn/hop3EarnSources.test.ts",
+  "packages/services/src/hop3-earn/hop3EarnService.test.ts"
 ]

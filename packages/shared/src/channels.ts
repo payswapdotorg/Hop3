@@ -218,6 +218,8 @@ export const ServiceChannels = {
   HighspeedCard: "highspeed-card",
   /** Onboarding 完成记录服务（本地持久化，后续上传服务器） */
   OnboardingRecord: "onboarding-record",
+  /** Hop3 Earn 域服务（worker profile / sources / opportunities / applications） */
+  Hop3Earn: "hop3-earn",
 } as const;
 
 export type ServiceChannelName = (typeof ServiceChannels)[keyof typeof ServiceChannels];
