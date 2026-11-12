@@ -9,8 +9,13 @@ name: gates
 # list; nothing is invented by analogy (HOP3_RULES §8).
 #
 # Deliberately out of scope (maintainer duties, honestly recorded):
-#   - desktop E2E (`pnpm test:e2e`) — release-track matrix, see README.en.md;
+#   - the desktop E2E release-track matrix (Windows shards / coverage runs —
+#     see README.en.md and scripts/run-windows-e2e-shards.mjs);
 #   - the login-gated in-shell earner journey — needs a real Z.AI account.
+#
+# In scope since the seventh TL session: the upstream-documented desktop
+# Electron E2E container demo (default preset, replay-isolated network) as a
+# second job — see the desktop-e2e-container job below.
 
 on:
   push:
@@ -112,3 +117,48 @@ jobs:
 
       - name: Full workspace build (all packages, incl. @zcode/web vite + desktop bundles)
         run: pnpm run build
+
+  # The upstream-documented Docker demo path (root command `pnpm
+  # test:e2e:container` → scripts/test-desktop-e2e-container.sh, default
+  # preset): builds Dockerfile.desktop-e2e (node:24.14.0-bookworm + Electron/
+  # Xvfb/dbus deps + frozen-lockfile install), prefetches the matching
+  # Chromedriver, then runs five replay-admitted specs inside the container
+  # with `--network none` (E2E_PROVIDER_HTTP_MODE=replay) — headless boot,
+  # UI smoke (v4 session pane + composer), e2ecase regression, replay-based
+  # upstream validation, and one ui-shell navigation spec. No credentials and
+  # no live network are used by the test itself (capture mode is opt-in and
+  # requires an API key by design). This exercises the desktop Electron shell
+  # end to end; the release-track matrix stays a maintainer duty.
+  desktop-e2e-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Free runner disk (hosted toolcache is dead weight for a Docker-only job)
+        # The e2e image carries its own toolchain; the preinstalled
+        # Android/.NET toolcache (~20GB) only risks exhausting the runner disk
+        # under the image + node_modules (~5GB). Purely additive headroom.
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc 2>/dev/null || true
+          df -h /
+
+      - name: Checkout (workspace as Docker build context)
+        uses: actions/checkout@v4
+        with:
+          # No merge-base or git metadata is needed here: .dockerignore excludes
+          # .git from the image and build-metadata.mjs falls back to ZCODE_COMMIT
+          # ("unknown") when git is absent — the upstream demo path is designed
+          # to run exactly like this.
+          fetch-depth: 1
+
+      - name: "Run desktop E2E container demo (default preset, replay-isolated)"
+        run: bash scripts/test-desktop-e2e-container.sh
+
+      - name: Upload E2E artifacts (reports, network capture, perf samples)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-artifacts
+          path: packages/desktop/.e2e-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
