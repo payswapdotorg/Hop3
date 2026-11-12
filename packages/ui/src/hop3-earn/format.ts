@@ -134,7 +134,7 @@ export function relativeTime(
   try {
     const parts = relativeTimeParts(d, locale);
     if (parts) {
-      return new Intl.RelativeTimeFormat(locale, { addSuffix: true }).format(
+      return new Intl.RelativeTimeFormat(locale).format(
         parts.value,
         parts.unit,
       );

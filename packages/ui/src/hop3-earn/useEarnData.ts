@@ -191,7 +191,7 @@ export function useEarnOpportunities(
 export function useEarnOpportunityDetail(
   service: IEarnService | null,
   id: string | null,
-): EarnQueryResult<OpportunityDetail> {
+): EarnQueryResult<OpportunityDetail | null> {
   const fetcher = useCallback(
     (svc: IEarnService) => svc.getOpportunityDetail(id ?? ""),
     [id],

@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
-import { isWorkspaceTab } from "@/store/tabStore.js";
+import { isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
 import {
   ECONOMICS_DISCLAIMER,
   NO_AUTO_SUBMIT_NOTICE,
@@ -79,7 +79,10 @@ export function EarnPage() {
   const goBackTarget = React.useMemo(() => {
     if (!activeWorkspacePath) return null;
     const workspaceIdentity = activeWorkspaceIdentity ?? undefined;
-    const matching = tabs.filter((tab) => isWorkspaceTab(tab) && tab.workspacePath === activeWorkspacePath);
+    const matching = tabs.filter(
+      (tab): tab is WorkspaceTabState =>
+        isWorkspaceTab(tab) && tab.workspacePath === activeWorkspacePath,
+    );
     const tab =
       matching.find((t) =>
         workspaceIdentity ? t.workspaceIdentity === workspaceIdentity : !t.workspaceIdentity,

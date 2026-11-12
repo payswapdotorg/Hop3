@@ -26,7 +26,7 @@ import type { DimensionResult, OpportunityCardDTO } from "@zcode/shared";
 
 import { eventLabel } from "./format.js";
 import { EconomicsLine } from "./economics.js";
-import { EligibilityBadge, EMERALD_BUTTON, FreshnessBadge, ProvenanceBadge } from "./badges.js";
+import { EligibilityBadge, FreshnessBadge, ProvenanceBadge, SUCCESS_BUTTON } from "./badges.js";
 import { QueryError, TimeHint, thinScrollbar } from "./common.js";
 import {
   ApplicationSection,
@@ -216,7 +216,7 @@ export function OpportunityDetailBody({
         ) : (
           <Button
             variant="outline"
-            className={cn(EMERALD_BUTTON)}
+            className={cn(SUCCESS_BUTTON)}
             disabled={createApplication.isPending}
             onClick={() => {
               void createApplication

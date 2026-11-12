@@ -25,11 +25,11 @@ import { useFormat } from "./useFormat.js";
 import { DataRow, QueryError } from "./common.js";
 import { EconomicsBreakdown, PayoutUnknownNotice } from "./economics.js";
 import {
-  AMBER_OUTLINE,
   DimensionValueBadge,
-  EMERALD_OUTLINE,
   FreshnessBadge,
   ProvenanceBadge,
+  SUCCESS_OUTLINE,
+  WARNING_OUTLINE,
 } from "./badges.js";
 
 // ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ function SkillChip({ skill, profile }: { skill: string; profile: ProfileDTO | nu
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant="outline" tabIndex={0} className={EMERALD_OUTLINE}>{skill}</Badge>
+          <Badge variant="outline" tabIndex={0} className={SUCCESS_OUTLINE}>{skill}</Badge>
         </TooltipTrigger>
         <TooltipContent>{intl.formatMessage({ id: "earn.detail.skillCovered" })}</TooltipContent>
       </Tooltip>
@@ -110,7 +110,7 @@ function SkillChip({ skill, profile }: { skill: string; profile: ProfileDTO | nu
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant="outline" tabIndex={0} className={AMBER_OUTLINE}>{skill}</Badge>
+          <Badge variant="outline" tabIndex={0} className={WARNING_OUTLINE}>{skill}</Badge>
         </TooltipTrigger>
         <TooltipContent>{intl.formatMessage({ id: "earn.detail.skillMissing" })}</TooltipContent>
       </Tooltip>
@@ -163,9 +163,9 @@ function CompensationBasisBadge({ basis }: { basis?: "fixed" | "estimated" | "un
   const { intl } = useZCodeIntl();
   switch (basis) {
     case "fixed":
-      return <Badge variant="outline" className={EMERALD_OUTLINE}>{intl.formatMessage({ id: "earn.detail.basis.fixed" })}</Badge>;
+      return <Badge variant="outline" className={SUCCESS_OUTLINE}>{intl.formatMessage({ id: "earn.detail.basis.fixed" })}</Badge>;
     case "estimated":
-      return <Badge variant="outline" className={AMBER_OUTLINE}>{intl.formatMessage({ id: "earn.detail.basis.estimated" })}</Badge>;
+      return <Badge variant="outline" className={WARNING_OUTLINE}>{intl.formatMessage({ id: "earn.detail.basis.estimated" })}</Badge>;
     default:
       return <Badge variant="outline">{intl.formatMessage({ id: "earn.detail.basis.unknown" })}</Badge>;
   }
@@ -197,8 +197,8 @@ export function EvidencePanel({
   const { intl } = useZCodeIntl();
   const format = useFormat();
   const evidence = detail?.evidence;
-  const sourceStatus = detail?.sourceStatus ?? evidence?.sourceStatus ?? null;
-  const sourceRecordId = detail?.sourceRecordId ?? evidence?.sourceRecordId ?? null;
+  const sourceStatus = evidence?.sourceStatus ?? null;
+  const sourceRecordId = evidence?.sourceRecordId ?? null;
   const riskFlags = detail?.riskFlags ?? [];
 
   const openListingLabel = intl.formatMessage({ id: "earn.common.openSourceListing" });
@@ -495,7 +495,7 @@ export function ApplicationSection({
             : intl.formatMessage({ id: "earn.detail.notStated" })}
         </span>
         {applicationSpec?.qualificationTest ? (
-          <Badge variant="outline" className={AMBER_OUTLINE}>
+          <Badge variant="outline" className={WARNING_OUTLINE}>
             {intl.formatMessage({ id: "earn.detail.application.qualificationTest" })}
           </Badge>
         ) : null}
