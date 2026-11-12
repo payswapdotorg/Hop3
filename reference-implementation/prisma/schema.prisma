@@ -1,0 +1,151 @@
+// Hop3 — Stage 1 Opportunity Domain (frozen contract, TL-owned)
+// Implements the minimum viable subset of payswapdotorg/Hop3 docs/DOMAIN-MODEL.md.
+// SQLite constraints: no enums (String + app-level validation), no lists and no
+// Json columns (structured payloads stored as JSON-encoded String fields).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// DOMAIN-MODEL 1.1 — WorkerCapabilityProfile (user-owned, private by default)
+model WorkerProfile {
+  id                    String   @id @default(cuid())
+  schemaVersion         Int      @default(1)
+  displayName           String?
+  countryCode           String? // ISO 3166-1 alpha-2, uppercase, e.g. "GH"
+  regionNote            String? // broad region/city, optional
+  workMode              String   @default("any") // remote | local | hybrid | any
+  languagesJson         String? // [{ code, proficiency, note? }]
+  skillsJson            String? // [{ name, experienceBand, evidenceNote? }]
+  qualificationsJson    String? // [{ type, issuer, year?, verificationState }]
+  preferencesJson       String? // { includedFamilies[], excludedFamilies[], constraints? }
+  weeklyHours           Int      @default(0)
+  timezone              String?
+  equipmentJson         String? // [{ kind, note }]
+  incomeGoalAmount      Float?
+  incomeGoalCurrency    String   @default("USD")
+  payoutCapabilitiesJson String? // [{ rail, status: available|unavailable|unknown, note }]
+  consentJson           String? // { perSource: { [sourceKey]: { fields[] } } }
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// CONNECTORS contract — source registry entry + runtime connection state
+model SourceConnection {
+  key                 String   @id // oneforma | upwork_mcp | fiverr_mcp | url_intake
+  displayName         String
+  sourceKind          String // public-board | official-mcp | user-link
+  accessMode          String
+  actorModesJson      String // ["earner"] etc.
+  operationsJson      String // { search:{allowed}, read:{allowed}, submit:{allowed:false} ... }
+  policyJson          String // full SourcePolicy descriptor (terms, restrictions, notes)
+  rankingPolicy       String   @default("hop3-allowed") // provider-order-only | hop3-allowed | none
+  rateLimitJson       String
+  freshnessMaxHours   Int      @default(24)
+  mode                String   @default("not-configured") // live | sandbox | blocked | not-configured
+  statusMessage       String?
+  evidenceUrl        String?
+  lastSyncAt          DateTime?
+  updatedAt           DateTime @updatedAt
+}
+
+// Source-run metadata (DOMAIN-MODEL 1.2 "Source and source-run metadata")
+model SourceRun {
+  id          String    @id @default(cuid())
+  sourceKey   String
+  mode        String // live | sandbox
+  status      String // running | ok | error | blocked
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  fetched     Int       @default(0)
+  inserted    Int       @default(0)
+  updated     Int       @default(0)
+  duplicates  Int       @default(0)
+  message     String?
+  errorsJson  String?
+}
+
+// DOMAIN-MODEL 1.2 — Opportunity (normalized pointer; provider stays authoritative)
+model Opportunity {
+  id                String   @id @default(cuid())
+  schemaVersion     Int      @default(1)
+  sourceKey         String
+  sourceRecordId    String // source-native id when available, else canonical URL
+  externalId        String // dedupe key within source
+  title             String
+  summary           String?
+  opportunityType   String? // annotation | survey | translation | gig | programme | ...
+  workMode          String? // remote | local | hybrid | unknown
+  canonicalUrl      String
+  platform          String
+  provenance        String   @default("live") // live | sandbox-fixture | user-submitted
+  eligibilityJson   String?
+  requirementsJson  String?
+  compensationJson  String?
+  payoutJson        String?
+  applicationJson   String?
+  timeJson          String?
+  riskFlagsJson     String?
+  sourceStatus      String?
+  firstSeenAt       DateTime @default(now())
+  lastSeenAt        DateTime @default(now())
+  observedAt        DateTime @default(now())
+  expiresAt         DateTime?
+  status            String   @default("active") // active | stale | expired
+  rawJson           String?
+  savedRecord       SavedOpportunity?
+  applications      Application[]
+
+  @@unique([sourceKey, externalId])
+}
+
+// Saved item (DOMAIN-MODEL 1.6)
+model SavedOpportunity {
+  id            String      @id @default(cuid())
+  opportunityId String      @unique
+  savedAt       DateTime    @default(now())
+  notes         String?
+  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+}
+
+// DOMAIN-MODEL 1.6 — Application / outcome tracking (event-backed, evidence-gated)
+model Application {
+  id                String    @id @default(cuid())
+  opportunityId     String
+  status            String    @default("draft") // see ApplicationStatus union in contracts.ts
+  draft             String? // prepared materials (JSON: { checklist[], messageDraft, notice })
+  draftGeneratedAt  DateTime?
+  draftModel        String? // transparency: generator identity
+  draftEditedByUser Boolean   @default(false)
+  submittedAt       DateTime?
+  submittedChannel  String? // upwork-web | oneforma-dashboard | fiverr-web | other
+  submittedEvidence String? // URL or user attestation (required before "applied")
+  acceptedAt        DateTime?
+  completedAt        DateTime?
+  approvedAt        DateTime?
+  paidAt            DateTime?
+  amountPaid        Float?
+  paidCurrency      String?
+  paymentEvidence   String? // user-reported vs payment-confirmed kept via events
+  outcomeNotes      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  events            ApplicationEvent[]
+  opportunity       Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+}
+
+model ApplicationEvent {
+  id            String     @id @default(cuid())
+  applicationId String
+  eventType     String // prepared | draft_edited | applied | qualification_pending | accepted | rejected | withdrawn | completed | submitted | approved | payment_pending | paid | note
+  evidenceType  String? // user-reported | provider-confirmed | payment-confirmed
+  evidenceUrl   String?
+  note          String?
+  createdAt     DateTime   @default(now())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
