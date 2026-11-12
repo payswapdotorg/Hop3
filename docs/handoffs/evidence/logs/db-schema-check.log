@@ -1,0 +1,22 @@
+
+> zcode@3.18.0 db:schema:check /home/z/hop3-work
+> node --test scripts/test/sqlite-schema-contract.test.mjs && pnpm --dir apps/zcode-cli exec tsx ../../scripts/check-sqlite-schema.ts
+
+✔ nullable/defaulted additions preserve old writes and composite identity (4.729487ms)
+✔ rejects column removal (0.712559ms)
+✔ rejects identity change (0.421037ms)
+✔ rejects required addition (0.570303ms)
+✔ rejects index removal (0.409286ms)
+✔ preserves automatic UNIQUE keys and their collation/order (1.627694ms)
+✔ rejects removal/change/addition of CHECK and automatic UNIQUE on old tables (1.766407ms)
+✔ SQL normalization preserves string literal case in indexes and CHECK (1.025459ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 72.133794
+SQLite schema compatible: packages/services/src/project-storage/schema.baseline.sql
+SQLite schema compatible: apps/zcode-cli/packages/adapters/src/storage/session-store/schema.baseline.sql

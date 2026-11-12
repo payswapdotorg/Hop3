@@ -1,0 +1,11 @@
+
+> zcode@3.18.0 typecheck /home/z/hop3-work
+> pnpm --filter @zcode/session-control typecheck && tsc -b packages/shared/tsconfig.testing.json packages/rpc packages/provider packages/provider-node packages/shared packages/design-runtime packages/services packages/client packages/server packages/zcode-server-cli packages/ui packages/web apps/dev-docs packages/e2e-report packages/desktop/tsconfig.main.json packages/desktop/tsconfig.host.json packages/desktop/tsconfig.renderer-services.json packages/desktop/tsconfig.e2e.json packages/plugin-api && tsc -p packages/desktop/tsconfig.remote-main.json --noEmit && tsc -p packages/zcode-cua --noEmit
+
+apps/zcode-cli                           |  WARN  Unsupported engine: wanted: {"node":"24.14.0"} (current: {"node":"v24.22.2","pnpm":"10.33.2"})
+
+> @zcode/session-control@ typecheck /home/z/hop3-work/packages/session-control
+> tsc --noEmit -p tsconfig.json
+
+Killed
+ ELIFECYCLE  Command failed with exit code 137.
