@@ -21,7 +21,10 @@
 |---|---|---|---|
 | [43316781097](https://github.com/payswapdotorg/Hop3/actions/runs/43316781097) | pull_request @ `1cf878b4` | **failure** | `pnpm install` inside bootstrap aborted with `ERR_PNPM_ENOENT` renaming tsup's nested `esbuild` from a `_tmp_` directory while concurrent native postinstalls (node-pty, esbuild, cpu-features, electron) ran — the transient hoisted-linker race class. Fixed by the bounded retry (commit `8a116564`). |
 | [43317079051](https://github.com/payswapdotorg/Hop3/actions/runs/43317079051) | pull_request @ `8a116564` | **success** — 12m49s | All 15 steps green; details in §3. |
-| [43320227978](https://github.com/payswapdotorg/Hop3/actions/runs/43320227978) | push @ `65478f6f` (post-merge) | see §4 | Validates the push-event wiring (`ARCHITECTURE_BASE=github.event.before`). |
+| [43320227978](https://github.com/payswapdotorg/Hop3/actions/runs/43320227978) | push @ `65478f6f` (post-merge of #6) | **success** — 12m13s | All 13 steps green; validates the push-event wiring (`ARCHITECTURE_BASE=github.event.before` — the scoped architecture gate diffs exactly the merged change). One bootstrap retry (the ENOENT flake again), attempt 2 succeeded. |
+| [43320740434](https://github.com/payswapdotorg/Hop3/actions/runs/43320740434) | pull_request @ `514e0280` (PR #7 docs) | **success** | Validates the docs + workflow-comment-correction tree before merge. |
+
+**Flake statistics:** the hoisted-linker ENOENT reproduced on the first attempt of every fresh-scope install (2/2 runs) and the bounded retry succeeded every time (2/2), with a visible `::warning` annotation per failed attempt — consistent with the transient race class, and the job still fails loudly if all three attempts fail.
 
 ## 3. Green run details (43317079051)
 
