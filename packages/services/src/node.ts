@@ -610,6 +610,11 @@ import {
   createHighspeedHttpTransport,
 } from "./highspeed/highspeedCardService.js";
 import { createHighspeedMockTransport } from "./highspeed/highspeedMockTransport.js";
+import { IEarnService } from "#src/hop3-earn/contract.js";
+// 工厂与仓库按 host 侧惯例从实现文件直接导入（与 OffPeakTaskService 同款）：
+// renderer 只经 ProxyChannel 触达 IEarnService 描述符，不 import 实现模块。
+import { createEarnService } from "#src/hop3-earn/hop3EarnService.js";
+import { EarnRepo } from "#src/hop3-earn/earnRepo.js";
 import { OffPeakTaskService } from "./session/offPeakTaskService.js";
 import { OffPeakTaskRepo } from "./session/offPeakTaskRepo.js";
 import { createOffPeakServerClient } from "./session/offPeakServerClient.js";
@@ -3144,6 +3149,18 @@ export function createLocalServices(options: {
         // 回写前向引用，供 zcodeAgentService 的 offPeak/create、offPeak/list 协议 handler 调用。
         offPeakTaskServiceForAgent = offPeakTaskService;
         return offPeakTaskService;
+      })(),
+    )
+    .register(
+      IEarnService,
+      (() => {
+        // Hop3 Stage 1 Earn 域（stage1/earn-port §2 后端端口）：15 方法服务面经本集合注册，
+        // renderer 经 ProxyChannel 直连（OffPeakTask 同款范式）。
+        // EarnRepo 与 tasks-index 同库（懒 ensureReady 首次调用时打开并跑 0008_earn_tables 迁移）；
+        // 句柄收集到 sqliteReposToClose，services 建好后在 return 前统一登记关闭。
+        const earnRepo = new EarnRepo();
+        sqliteReposToClose.push(earnRepo);
+        return createEarnService({ repo: earnRepo });
       })(),
     )
     .register(

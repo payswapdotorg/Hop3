@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
 import {
+  CircleDollarSign,
   Copy,
   PencilRuler,
   Globe,
@@ -48,6 +49,7 @@ import { useOpenRewards } from "@/rewards/RewardsProvider.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
+import { useTabStore } from "@/store/TabStoreProvider.js";
 import { normalizeInterfaceMode } from "@/lib/interfaceMode.js";
 import type { Theme } from "@/useTheme.js";
 import { WorkspaceWebRemoteControlTrigger } from "@/WorkspaceWebRemoteControlTrigger.js";
@@ -134,6 +136,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   const { intl } = useZCodeIntl();
   const platform = usePlatform();
   const openRewards = useOpenRewards();
+  const openEarnTab = useTabStore((state) => state.openEarnTab);
   const interfaceMode = useZCodeStore((state) => state.interfaceMode);
   const setInterfaceMode = useSetInterfaceModeWithTelemetry(platform, "app.profile");
   const zoomInShortcutLabel = useShortcutCommandLabel("zoomIn");
@@ -191,6 +194,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
     settingsButtonMode === "back"
       ? intl.formatMessage({ id: "workspace.backToWorkspace" })
       : intl.formatMessage({ id: "settings.title" });
+  const earnButtonLabel = intl.formatMessage({ id: "earn.entry.label" });
   const usageButtonClick = onUsageClick ?? onSettingsButtonClick;
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [desktopZoomLevel, setDesktopZoomLevel] = useState(0);
@@ -472,6 +476,20 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
               compact
             />
           ) : null}
+          {/* Hop3 Earn 入口：打开窗口内唯一的 Earn 页签（Stage 1 §2）。
+              与设置齿轮并排；页签激活后面板覆盖 workspace（或独立全屏）。 */}
+          <ControlHintTooltip title={earnButtonLabel}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              data-testid="earn-entry-button"
+              aria-label={earnButtonLabel}
+              onClick={openEarnTab}
+            >
+              <CircleDollarSign className="size-4" />
+            </Button>
+          </ControlHintTooltip>
           <ControlHintTooltip title={settingsButtonLabel}>
             <Button
               type="button"

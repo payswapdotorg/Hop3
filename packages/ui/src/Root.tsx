@@ -26,6 +26,7 @@ import {
 } from "@zcode/shared";
 import { TooltipProvider } from "@/components/ui/tooltip.js";
 import { Button } from "@/components/ui/button.js";
+import { cn } from "@/components/lib/utils.js";
 import { PlatformProvider } from "@/hooks/usePlatform.js";
 import { ServiceProvider, useComposerClientNamespace } from "@/hooks/useServices.js";
 import {
@@ -74,7 +75,7 @@ import { StoreProvider, useZCodeStore } from "@/store/StoreProvider.js";
 import { setMcpStorePlatform } from "@/store/mcpStore.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { TabStoreProvider, useTabStore, useTabStoreApi } from "@/store/TabStoreProvider.js";
-import { isSettingsTab, isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
+import { isEarnTab, isSettingsTab, isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
 import { logger } from "@/logger.js";
 import { RootShell } from "@/root/RootShell.js";
 import { RootWorkspaceContent } from "@/root/RootWorkspaceContent.js";
@@ -118,6 +119,7 @@ import { setUiPerfArmsReporter } from "@/lib/uiPerfArmsTelemetry.js";
 import { setSessionOpenArmsReporter } from "@/lib/sessionOpenArmsTelemetry.js";
 import { setSendFunnelArmsReporter } from "@/lib/sendFunnelArmsTelemetry.js";
 import { RootStartupLoading } from "@/root/RootStartupLoading.js";
+import { EarnPage } from "@/hop3-earn/index.js";
 import { resolveProviderAvailabilityState } from "@/lib/modelProviderAvailability.js";
 import { useProviderAvailabilityLoginEntryGuard } from "@/root/useProviderAvailabilityLoginEntryGuard.js";
 import { ensureProviderFamilyDomainMigration } from "@/lib/providerFamilyDomainMigration.js";
@@ -445,6 +447,9 @@ function RootInner({
   const activeTab = activeTabId ? (tabs.find((tab) => tab.id === activeTabId) ?? null) : null;
   const activeWorkspaceTab = activeTab && isWorkspaceTab(activeTab) ? activeTab : null;
   const isSettingsTabActive = activeTab ? isSettingsTab(activeTab) : false;
+  // Earn 页签与 settings 同款 union 扩展：激活时 activeWorkspaceTab 为空，
+  // 但 activeWorkspacePath 投影保留 → workspace 壳层继续作为覆盖层背后目标。
+  const isEarnTabActive = activeTab ? isEarnTab(activeTab) : false;
   const {
     workspaceShellPath,
     workspaceIdentity: workspaceShellIdentity,
@@ -847,7 +852,10 @@ function RootInner({
       // Bug 原因：此前只回传 workspacePath，Shell 再按路径反查 identity；多设备 conversation 路径
       // 相同时会归到错误 Source。改为在这里按 Source 归属一次性解析 path + identity。
       await resolveConversationWorkspaceTarget({
-        getTabs: () => tabStoreApi.getState().tabs,
+        // Earn 页签激活（同 settings）时 getTabs 以 workspace-only 过滤喂给该解析器：
+        // WindowTabState union 扩展（hop3-earn kind）后，非 workspace 种类不再流入
+        // ConversationWorkspaceTab | { kind: "settings" } 的既有窄联合。
+        getTabs: () => tabStoreApi.getState().tabs.filter(isWorkspaceTab),
         activeWorkspacePath,
         activeWorkspaceIdentity,
         resolveLocalConversationWorkspacePath: handleResolveConversationWorkspace,
@@ -1139,7 +1147,8 @@ function RootInner({
   const canEnterNativeThemeSyncSurface = Boolean(
     !isStartupRenderBlocked &&
     !welcomeScreenOpenReason &&
-    (workspaceShellPath || isSettingsTabActive),
+    // Earn 与 settings 同样是全屏 surface：进入后同样允许原生主题同步。
+    (workspaceShellPath || isSettingsTabActive || isEarnTabActive),
   );
 
   useEffect(() => {
@@ -1191,6 +1200,8 @@ function RootInner({
       isStartupProviderLoginEntryOpen ||
       workspaceShellPath ||
       isSettingsTabActive ||
+      // Earn 独立面激活时不自动兑底建默认 workspace（与 settings 同语义）。
+      isEarnTabActive ||
       !allowOpenWorkspace ||
       didRequestFallbackWorkspaceRef.current
     ) {
@@ -1236,6 +1247,7 @@ function RootInner({
     allowOpenWorkspace,
     handleSelectConversationWorkspace,
     isBootstrappingInitialWorkspace,
+    isEarnTabActive,
     isResolvingProviderStartupState,
     isResolvingStartupAuthState,
     isRestoring,
@@ -1511,6 +1523,9 @@ function RootInner({
     </ScopedErrorBoundary>
   );
 
+  // Earn 覆盖层错误边界与 RootWorkspaceContent 的 workspaceKey 同一来源。
+  const workspaceKeyForEarnOverlay = workspaceShellIdentity?.trim() || workspaceShellPath;
+
   const settingsLayerProps = {
     isDesktop,
     isMacDesktop,
@@ -1576,6 +1591,26 @@ function RootInner({
     );
   }
 
+  // Earn 独立面：窗口内无 workspace 页签时的全屏 Earn 页（与 settings 独立面同构）。
+  if (!workspaceShellPath && isEarnTabActive) {
+    return (
+      <RootShell>
+        {rootModelSelectionErrorNode}
+        {remoteConnectionDialog}
+        {directoryBrowserDialog}
+        <ScopedErrorBoundary
+          scope="earn-page"
+          resetKeys={["earn-root"]}
+          variant="panel"
+          className="h-full"
+        >
+          <EarnPage />
+        </ScopedErrorBoundary>
+        {onboardingDialog}
+      </RootShell>
+    );
+  }
+
   if (
     !workspaceShellPath &&
     !isDesktop &&
@@ -1612,7 +1647,7 @@ function RootInner({
       {directoryBrowserDialog}
       <OccupationOnboarding
         showWindowControls={Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop))}
-        showChildrenWhileLoading={!workspaceShellPath && isSettingsTabActive}
+        showChildrenWhileLoading={!workspaceShellPath && (isSettingsTabActive || isEarnTabActive)}
         isMacDesktop={isMacDesktop}
         isWindowsDesktop={isWindowsDesktop}
       >
@@ -1629,62 +1664,85 @@ function RootInner({
             </ScopedErrorBoundary>
           ) : null
         ) : (
-          <RemoteWorkspaceControllerProvider controller={remoteWorkspaceController}>
-            <RemoteProjectPresentationProvider
-              reconnectingKeys={reconnectingRemoteWorkspaceKeys}
-              errors={remoteWorkspaceErrorByWorkspaceKey}
-              recovery={remoteWorkspaceRecoveryByWorkspaceKey}
-              onReconnect={
-                webRemoteControlWorkspaceSwitcher?.reconnectWorkspace ??
-                handleReconnectRemoteWorkspace
-              }
-            >
-              <RootWorkspaceContent
-                workspaceScopedServices={workspaceScopedServices}
-                baseFeedbackService={services.feedbackService}
-                workspaceShellPath={workspaceShellPath}
-                workspaceIdentity={workspaceShellIdentity}
-                workspaceRemoteSessionId={workspaceShellRemoteSessionId}
-                activeWorkspacePath={activeWorkspacePath}
-                isSettingsTabActive={isSettingsTabActive}
-                handleConnectRemote={handleConnectRemote}
-                handleSelectRemoteProject={handleSelectRemoteProject}
-                handleCancelRemoteProject={handleCancelRemoteProject}
-                handleReconnectRemoteWorkspace={handleReconnectRemoteWorkspace}
-                handleCreateTask={handleCreateTask}
-                handleCreateConversationTask={handleCreateConversationTask}
-                handleResolveConversationWorkspace={handleResolveConversationWorkspaceForShell}
-                handleOpenWorkspace={handleOpenWorkspace}
-                handleOpenFolderFromWorkspaceMenu={handleOpenFolderFromWorkspaceMenu}
-                handleOpenRemoteWorkspace={
-                  allowRemoteWorkspace ? handleOpenRemoteConnection : undefined
+          /* Earn 覆盖层：workspace 壳层常驻挂载（App 不卸载），Earn 激活时整棵
+             inert + 透明，Earn 面板 absolute 覆盖其上 —— 与 settings 在
+             RootWorkspaceContent 内部的覆盖语义一致（那边不可编辑，这里不动它）。 */
+          <div
+            className={cn(
+              "relative min-h-0 h-full",
+              isEarnTabActive && "opacity-0 pointer-events-none",
+            )}
+            aria-hidden={isEarnTabActive}
+            inert={isEarnTabActive ? true : undefined}
+            data-root-workspace-surface={isEarnTabActive ? "earn-inert" : "interactive"}
+          >
+            <RemoteWorkspaceControllerProvider controller={remoteWorkspaceController}>
+              <RemoteProjectPresentationProvider
+                reconnectingKeys={reconnectingRemoteWorkspaceKeys}
+                errors={remoteWorkspaceErrorByWorkspaceKey}
+                recovery={remoteWorkspaceRecoveryByWorkspaceKey}
+                onReconnect={
+                  webRemoteControlWorkspaceSwitcher?.reconnectWorkspace ??
+                  handleReconnectRemoteWorkspace
                 }
-                remoteConnectionInProgress={remoteConnectionInProgress}
-                remoteWorkspaceSessions={remoteWorkspaceSessions}
-                allowRemoteWorkspace={allowRemoteWorkspace}
-                handleBackFromSettings={handleBackFromSettings}
-                handleOpenTaskFromSettings={handleOpenTaskFromSettings}
-                handleLogout={user ? handleLogout : undefined}
-                onLogin={!user ? handleOpenLoginEntry : undefined}
-                user={user}
-                reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-                remoteWorkspaceRecoveryByWorkspaceKey={remoteWorkspaceRecoveryByWorkspaceKey}
-                remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-                remoteConnectionLogs={remoteConnectionLogs}
-                allowOpenWorkspace={allowOpenWorkspace}
-                webRemoteControlWorkspaceSwitcher={webRemoteControlWorkspaceSwitcher}
-                initialSidebarFileTreeOpen={initialSidebarFileTreeOpen}
-                initialWebRemoteControlMobileNavigationIntent={
-                  initialWebRemoteControlMobileNavigationIntent
-                }
-                webRemoteControlTerminalTransportState={webRemoteControlTerminalTransportState}
-                isDesktop={isDesktop}
-                isMacDesktop={isMacDesktop}
-                isWindowsDesktop={isWindowsDesktop}
-                supportsEmbeddedBrowser={supportsEmbeddedBrowser}
-              />
-            </RemoteProjectPresentationProvider>
-          </RemoteWorkspaceControllerProvider>
+              >
+                <RootWorkspaceContent
+                  workspaceScopedServices={workspaceScopedServices}
+                  baseFeedbackService={services.feedbackService}
+                  workspaceShellPath={workspaceShellPath}
+                  workspaceIdentity={workspaceShellIdentity}
+                  workspaceRemoteSessionId={workspaceShellRemoteSessionId}
+                  activeWorkspacePath={activeWorkspacePath}
+                  isSettingsTabActive={isSettingsTabActive}
+                  handleConnectRemote={handleConnectRemote}
+                  handleSelectRemoteProject={handleSelectRemoteProject}
+                  handleCancelRemoteProject={handleCancelRemoteProject}
+                  handleReconnectRemoteWorkspace={handleReconnectRemoteWorkspace}
+                  handleCreateTask={handleCreateTask}
+                  handleCreateConversationTask={handleCreateConversationTask}
+                  handleResolveConversationWorkspace={handleResolveConversationWorkspaceForShell}
+                  handleOpenWorkspace={handleOpenWorkspace}
+                  handleOpenFolderFromWorkspaceMenu={handleOpenFolderFromWorkspaceMenu}
+                  handleOpenRemoteWorkspace={
+                    allowRemoteWorkspace ? handleOpenRemoteConnection : undefined
+                  }
+                  remoteConnectionInProgress={remoteConnectionInProgress}
+                  remoteWorkspaceSessions={remoteWorkspaceSessions}
+                  allowRemoteWorkspace={allowRemoteWorkspace}
+                  handleBackFromSettings={handleBackFromSettings}
+                  handleOpenTaskFromSettings={handleOpenTaskFromSettings}
+                  handleLogout={user ? handleLogout : undefined}
+                  onLogin={!user ? handleOpenLoginEntry : undefined}
+                  user={user}
+                  reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
+                  remoteWorkspaceRecoveryByWorkspaceKey={remoteWorkspaceRecoveryByWorkspaceKey}
+                  remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
+                  remoteConnectionLogs={remoteConnectionLogs}
+                  allowOpenWorkspace={allowOpenWorkspace}
+                  webRemoteControlWorkspaceSwitcher={webRemoteControlWorkspaceSwitcher}
+                  initialSidebarFileTreeOpen={initialSidebarFileTreeOpen}
+                  initialWebRemoteControlMobileNavigationIntent={
+                    initialWebRemoteControlMobileNavigationIntent
+                  }
+                  webRemoteControlTerminalTransportState={webRemoteControlTerminalTransportState}
+                  isDesktop={isDesktop}
+                  isMacDesktop={isMacDesktop}
+                  isWindowsDesktop={isWindowsDesktop}
+                  supportsEmbeddedBrowser={supportsEmbeddedBrowser}
+                />
+              </RemoteProjectPresentationProvider>
+            </RemoteWorkspaceControllerProvider>
+            {isEarnTabActive ? (
+              <ScopedErrorBoundary
+                scope="earn-page"
+                resetKeys={[workspaceKeyForEarnOverlay, isEarnTabActive]}
+                variant="panel"
+                className="absolute inset-0 z-10"
+              >
+                <EarnPage />
+              </ScopedErrorBoundary>
+            ) : null}
+          </div>
         )}
         {onboardingDialog}
       </OccupationOnboarding>
