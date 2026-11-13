@@ -225,23 +225,59 @@ async function ensureV4TimelineAtBottom(): Promise<void> {
  * 通知行是通知管线渲染出的 DOM（第二层最终一致：capture 记录已落盘、完成轮已收口，
  * 通知行仍在渲染队列里）。且它收在「已处理」折叠里、又长在虚拟列表末端：读取前既要
  * 补开收起的折叠，也要把时间线带回底部把末尾行重新挂载。期望非零的通知行断言把
- * 这些读取前置放进轮询本身，而不是假设首次读取时它们都已满足。
+ * 这些读取前置放进轮询本身，而不是假设首次读取时它们都已满足。慢 runner 上
+ * agent 恢复路径的 originMeta 水化也可能晚于 30s（第三轮观察），默认等 90s。
  */
 async function expectNotificationRowsEventually(
   kindLabel: string,
   expected: number,
   timeoutMsg: string,
-  timeout = 30_000,
+  timeout = 90_000,
 ): Promise<void> {
-  await browser.waitUntil(
-    async () => {
-      if ((await countNotificationRows(kindLabel)) === expected) return true;
-      await openClosedHistoryFolds();
-      await ensureV4TimelineAtBottom();
-      return false;
-    },
-    { timeout, timeoutMsg },
-  );
+  let latestCount = -1;
+  try {
+    await browser.waitUntil(
+      async () => {
+        latestCount = await countNotificationRows(kindLabel);
+        if (latestCount === expected) return true;
+        await openClosedHistoryFolds();
+        await ensureV4TimelineAtBottom();
+        return false;
+      },
+      { timeout, timeoutMsg },
+    );
+  } catch (error) {
+    // 超时现场必须带证据：行到底没渲染还是没挂载。末尾几行的 testid/文字 +
+    // 全部通知行前缀节点的实际文字，把下一轮诊断从猜测变成读数。
+    const tail = await describeTimelineTail();
+    const allRows = await browser.execute(
+      (selector) =>
+        Array.from(document.querySelectorAll<HTMLElement>(selector)).map((row) =>
+          (row.textContent ?? "").replace(/\s+/gu, " ").trim().slice(0, 120),
+        ),
+      NOTIFICATION_ROW,
+    );
+    throw new Error(
+      `${timeoutMsg}; latestCount=${latestCount}; notificationRows=${JSON.stringify(allRows)}; timelineTail=${tail}`,
+      { cause: error },
+    );
+  }
+}
+
+/** 失败现场的时间线末尾几行（照 amend spec 的 describeTimelineTail 惯例）。 */
+async function describeTimelineTail(): Promise<string> {
+  return browser.execute(() => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-row-id]")).slice(-8);
+    return rows
+      .map((row) => {
+        const ids = Array.from(row.querySelectorAll<HTMLElement>("[data-testid]"))
+          .map((element) => element.dataset.testid)
+          .slice(0, 12)
+          .join(",");
+        return `#${row.dataset.rowId} [${ids}] ${row.innerText.replace(/\s+/gu, " ").slice(0, 200)}`;
+      })
+      .join("\n");
+  });
 }
 
 /** 完成卡四格的终值：数字刚挂载时会翻动，相邻两次读数一致才算停下。 */
@@ -594,7 +630,8 @@ describe("动态工作流 · 恢复停下的 run", () => {
   // 文档（transcript-and-notifications.md「What the model reads」「The notification row」）：
   // `<description>` 与通知行的主文本都是 run 名，不区分谁恢复的。
   it("DWU-04 主代理恢复的 run，完成通知的 description 与通知行写的是 run 名，不是 run id", async function () {
-    this.timeout(60_000);
+    // 慢 runner 上 agent 恢复路径的通知行水化可能晚于 30s：行等 90s，it 层超时相应放宽。
+    this.timeout(150_000);
     if (!resumedByAgentRunId) throw new Error("DWU-03 没有留下 run");
     const named = await countUpstreamRequests({
       lastUserMessageIncludes: [
@@ -604,22 +641,37 @@ describe("动态工作流 · 恢复停下的 run", () => {
       ],
     });
     // 通知行渲染晚于完成轮收口（第二层最终一致），且收在折叠里、长在虚拟列表末端：
-    // 轮询期间补开折叠并带回底部，行带着 run 名出现前不收口。
+    // 轮询期间补开折叠并带回底部，行带着 run 名出现前不收口；超时现场带证据。
     let rowText = "";
-    await browser.waitUntil(
-      async () => {
-        rowText = await browser.execute((selector) => {
-          const rows = Array.from(document.querySelectorAll(selector));
-          const row = rows.find((item) => (item.textContent ?? "").includes("工作流已完成"));
-          return row?.textContent ?? "";
-        }, NOTIFICATION_ROW);
-        if (rowText.includes(RESUMED_BY_AGENT_NAME)) return true;
-        await openClosedHistoryFolds();
-        await ensureV4TimelineAtBottom();
-        return false;
-      },
-      { timeout: 30_000, timeoutMsg: "完成通知行没有最终渲染出 run 名" },
-    );
+    try {
+      await browser.waitUntil(
+        async () => {
+          rowText = await browser.execute((selector) => {
+            const rows = Array.from(document.querySelectorAll(selector));
+            const row = rows.find((item) => (item.textContent ?? "").includes("工作流已完成"));
+            return row?.textContent ?? "";
+          }, NOTIFICATION_ROW);
+          if (rowText.includes(RESUMED_BY_AGENT_NAME)) return true;
+          await openClosedHistoryFolds();
+          await ensureV4TimelineAtBottom();
+          return false;
+        },
+        { timeout: 90_000, timeoutMsg: "完成通知行没有最终渲染出 run 名" },
+      );
+    } catch (error) {
+      const tail = await describeTimelineTail();
+      const allRows = await browser.execute(
+        (selector) =>
+          Array.from(document.querySelectorAll<HTMLElement>(selector)).map((row) =>
+            (row.textContent ?? "").replace(/\s+/gu, " ").trim().slice(0, 120),
+          ),
+        NOTIFICATION_ROW,
+      );
+      throw new Error(
+        `完成通知行没有最终渲染出 run 名; notificationRows=${JSON.stringify(allRows)}; timelineTail=${tail}`,
+        { cause: error },
+      );
+    }
     expect({ named, rowHasName: rowText.includes(RESUMED_BY_AGENT_NAME) }).toEqual({
       named: 1,
       rowHasName: true,
