@@ -196,6 +196,16 @@ function parseSums(text) {
 
 const ASSET_KINDS = ["deb", "rpm", "pacman", "AppImage", "exe", "dmg"];
 
+const ASSET_PLATFORMS = {
+  deb: "linux",
+  rpm: "linux",
+  pacman: "linux",
+  AppImage: "linux",
+  exe: "win",
+  "dmg-arm64": "mac",
+  "dmg-x64": "mac",
+};
+
 const ASSET_MATCHERS = {
   deb: (name) => name.endsWith("-linux-amd64.deb"),
   rpm: (name) => name.endsWith("-linux-x86_64.rpm"),
@@ -514,6 +524,13 @@ async function main() {
         : fail("--asset dmg is only valid on macOS")
       : options.asset
     : defaultAssetKind(detected.kind, detected.arch);
+
+  if ((ASSET_PLATFORMS[kind] || detected.kind) !== detected.kind) {
+    const supported = Object.entries(ASSET_PLATFORMS)
+      .filter(([, platform]) => platform === detected.kind)
+      .map(([name]) => name);
+    fail(`asset "${kind}" does not match platform ${detected.platform}; use one of: ${supported.join(", ")}`);
+  }
 
   const asset = selectAsset(sums, kind);
   const manifestEntry = (manifest.assets || []).find((entry) => entry.name === asset.name);
