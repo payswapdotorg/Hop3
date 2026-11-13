@@ -202,9 +202,24 @@ describe("动态工作流 · 修订在跑的 run", () => {
     // 用户看到的是芯片重新读出它的界（presentation.md「The settings popover」末段）。
     await digest.$('[data-testid="workflow-card-open-details"]').click();
     const chip = await $('[data-testid="workflow-run-concurrency"]');
+    // 修复原因：运行中的卡会随状态重渲染；revealDigest 之后的那一次 click 可能打在已被
+    // 替换的卡节点上，侧板根本没开，芯片永远等不到（慢 runner 上的一次真实失败）。等待期间
+    // 若侧板没开（status-row 只存在于 run 侧板）就重新打开；侧板已开则只等芯片渲染，不再
+    // 点击，避免把已开的侧板点关。重开时重新查询当前 DOM 的卡，不沿用可能已失效的 digest 句柄。
     await browser.waitUntil(
-      async () => (await chip.isExisting()) && /^最大并发数 2\b/u.test(await chip.getText()),
-      { timeout: 30000, timeoutMsg: "run 侧板没有出现「最大并发数 2」芯片" },
+      async () => {
+        if ((await chip.isExisting()) && /^最大并发数 2\b/u.test(await chip.getText())) {
+          return true;
+        }
+        if (!(await $('[data-testid="workflow-run-status-row"]').isExisting())) {
+          const reopen = await digestOf(firstRunId).$('[data-testid="workflow-card-open-details"]');
+          if (await reopen.isExisting()) {
+            await reopen.click().catch(() => undefined);
+          }
+        }
+        return false;
+      },
+      { timeout: 60000, timeoutMsg: "run 侧板没有出现「最大并发数 2」芯片" },
     );
   });
 

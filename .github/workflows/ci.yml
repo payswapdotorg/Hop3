@@ -291,9 +291,15 @@ jobs:
         # Eventually (browser.waitUntil) so they poll until the artifact
         # reflects the already-completed turn, matching how every other
         # capture read in the suite already waits. Zero-count assertions
-        # stay immediate by design (a lagging file cannot fail them). The
-        # de-advisory evidence is this step's own blocking run on the fix
-        # commit.
+        # stay immediate by design (a lagging file cannot fail them). A
+        # second eventual-consistency layer surfaced on the first blocking
+        # run (43515223461): the notification-row DOM renders after the
+        # turn closes (resume DWU-03 read the row at 0 with the capture
+        # record already present), and the amend spec's side-pane chip
+        # timed out when a card re-render swallowed the open-details click
+        # — both now also poll (expectNotificationRowsEventually; re-open
+        # the pane only while the pane is provably closed). The de-advisory
+        # evidence is this step's own blocking run on the fix commits.
         env:
           SKIP_IMAGE_BUILD: "1"
         run: bash scripts/test-desktop-e2e-container.sh conversation-session-verified

@@ -195,6 +195,23 @@ async function expectUpstreamRequestCountEventually(
   });
 }
 
+/**
+ * 通知行是通知管线渲染出的 DOM（第一次观察到的第二层最终一致：capture 记录已落盘、
+ * 完成轮已收口，而通知行仍在渲染队列里；慢 runner 上立即读数会读到 0，下一
+ * 个 it 再读才看到行——与 capture 落盘滞后同族）。期望非零的通知行断言同样轮询。
+ */
+async function expectNotificationRowsEventually(
+  kindLabel: string,
+  expected: number,
+  timeoutMsg: string,
+  timeout = 30_000,
+): Promise<void> {
+  await browser.waitUntil(async () => (await countNotificationRows(kindLabel)) === expected, {
+    timeout,
+    timeoutMsg,
+  });
+}
+
 /** 完成卡四格的终值：数字刚挂载时会翻动，相邻两次读数一致才算停下。 */
 async function readSettledFigures(): Promise<Record<string, string>> {
   await $(COMPLETION_CARD).waitForDisplayed({ timeout: 60_000 });
@@ -357,8 +374,8 @@ describe("动态工作流 · 恢复停下的 run", () => {
       2,
       "终态通知总数没有最终落在 2（停止 + 完成）",
     );
-    expect(await countNotificationRows("工作流已完成")).toBe(1);
-    expect(await countNotificationRows("工作流已停止")).toBe(1);
+    await expectNotificationRowsEventually("工作流已完成", 1, "完成通知行没有最终渲染出 1 条");
+    await expectNotificationRowsEventually("工作流已停止", 1, "停止通知行没有最终渲染出 1 条");
     expect(await readSettledFigures()).toEqual({ subagents: "2", phases: "2" });
   });
 
@@ -434,7 +451,7 @@ describe("动态工作流 · 恢复停下的 run", () => {
       1,
       "终态通知总数没有最终落在 1（重启丢弃了 stopped 通知）",
     );
-    expect(await countNotificationRows("工作流已完成")).toBe(1);
+    await expectNotificationRowsEventually("工作流已完成", 1, "完成通知行没有最终渲染出 1 条");
     expect(await countNotificationRows("工作流已停止")).toBe(0);
     expect(await readSettledFigures()).toEqual({ subagents: "2", phases: "3" });
   });
@@ -539,7 +556,7 @@ describe("动态工作流 · 恢复停下的 run", () => {
       1,
       "完成的终态通知没有最终进入 capture（期望恰好 1 条）",
     );
-    expect(await countNotificationRows("工作流已完成")).toBe(1);
+    await expectNotificationRowsEventually("工作流已完成", 1, "完成通知行没有最终渲染出 1 条");
   });
 
   // 文档（transcript-and-notifications.md「What the model reads」「The notification row」）：
@@ -554,11 +571,20 @@ describe("动态工作流 · 恢复停下的 run", () => {
         `<description>${RESUMED_BY_AGENT_NAME}</description>`,
       ],
     });
-    const rowText = await browser.execute((selector) => {
-      const rows = Array.from(document.querySelectorAll(selector));
-      const row = rows.find((item) => (item.textContent ?? "").includes("工作流已完成"));
-      return row?.textContent ?? "";
-    }, NOTIFICATION_ROW);
+    // 通知行渲染晚于完成轮收口（本文件已观察到的第二层最终一致）：行没带着 run 名出现
+    // 之前轮询等待，而不是只读一次。
+    let rowText = "";
+    await browser.waitUntil(
+      async () => {
+        rowText = await browser.execute((selector) => {
+          const rows = Array.from(document.querySelectorAll(selector));
+          const row = rows.find((item) => (item.textContent ?? "").includes("工作流已完成"));
+          return row?.textContent ?? "";
+        }, NOTIFICATION_ROW);
+        return rowText.includes(RESUMED_BY_AGENT_NAME);
+      },
+      { timeout: 30_000, timeoutMsg: "完成通知行没有最终渲染出 run 名" },
+    );
     expect({ named, rowHasName: rowText.includes(RESUMED_BY_AGENT_NAME) }).toEqual({
       named: 1,
       rowHasName: true,
