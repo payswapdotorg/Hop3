@@ -247,6 +247,19 @@ jobs:
           SKIP_IMAGE_BUILD: "1"
         run: bash scripts/test-desktop-e2e-container.sh conversation-session-verified
 
+      - name: "Normalize artifact permissions (container writes as root; plugin test dirs land 0700)"
+        # First-run observation (run 43377638853): the plugin-ui-session-ready spec
+        # creates its test workspace inside the bind-mounted artifact root with
+        # owner-only permissions (written by the container's root user), so
+        # actions/upload-artifact@v4 — running as the runner user — fails with
+        # EACCES: permission denied, scandir .../plugin-ui-session-ready-*.
+        # The artifacts are replay-fixture reports from a --network none run
+        # (no credentials ever enter the container), so making them
+        # world-readable-for-upload loses nothing. a+rX adds read for everyone
+        # and traversal on directories only — never execute bits on files.
+        if: always()
+        run: sudo chmod -R a+rX packages/desktop/.e2e-artifacts/ || true
+
       - name: Upload E2E artifacts (reports, network capture, perf samples)
         if: always()
         uses: actions/upload-artifact@v4
