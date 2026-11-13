@@ -119,7 +119,10 @@ jobs:
 
   build-windows:
     name: Hop3 Windows x64 installer
-    runs-on: windows-latest
+    # windows-latest currently resolves to a VS 2026 image; the repository's
+    # runtime host build pins the "Visual Studio 17 2022" CMake generator, so
+    # pin the VS 2022 runner image to match the pinned toolchain.
+    runs-on: windows-2022
     timeout-minutes: 120
     steps:
       - name: Checkout tag
