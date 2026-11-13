@@ -282,8 +282,13 @@ jobs:
           set -euo pipefail
           cd release-staging
           mkdir -p assets
+          # upload-artifact v4 keeps each artifact under its least-common-ancestor
+          # (e.g. <name>/desktop/dist/...), so resolve installers and metadata recursively.
           find . -name "Hop3-*" -type f -exec cp {} assets/ \;
-          cp */build-meta.json assets/build-meta.json 2>/dev/null || true
+          meta_src="$(find . -name build-meta.json -type f | head -n1)"
+          if [ -n "$meta_src" ]; then
+            cp "$meta_src" assets/build-meta.json
+          fi
           cd assets
           echo "::group::release assets"
           ls -lh .
