@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -35,6 +36,19 @@ function resolveTarArchiveArg(archivePath, cwd) {
   return toTarPosixPath(archivePath);
 }
 
+// Bugfix: GitHub Windows runner 的 PATH 上 GNU tar（Git for Windows）在 bsdtar 之前，
+// 而跨盘符回退仍会产出 D:/... 绝对参数，GNU tar 把盘符冒号当远程主机名直接失败
+// （“tar (child): Cannot connect to D:”）。Windows 10 1803+ 自带 bsdtar 位于
+// System32\tar.exe，天然接受盘符路径；这里按绝对路径显式解析它，使 tar 解析
+// 不再受 PATH 顺序（或 WSL bash 阴影）影响。缺失时退回裸 "tar" 保持旧行为。
+function resolveTarCommand() {
+  if (process.platform !== "win32") {
+    return "tar";
+  }
+  const systemTar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+  return existsSync(systemTar) ? systemTar : "tar";
+}
+
 export function extractPrebuiltArchive({ archivePath, archiveExt, extractDir, cwd }) {
   mkdirSync(extractDir, { recursive: true });
   if (archiveExt === "zip") {
@@ -56,7 +70,7 @@ export function extractPrebuiltArchive({ archivePath, archiveExt, extractDir, cw
 
   const tarCwd = cwd ?? process.cwd();
   runCommand(
-    "tar",
+    resolveTarCommand(),
     ["-xzf", resolveTarArchiveArg(archivePath, tarCwd), "-C", toTarPosixPath(extractDir)],
     { cwd: tarCwd },
   );
