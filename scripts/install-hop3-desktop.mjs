@@ -14,7 +14,7 @@
  * Usage:
  *   node scripts/install-hop3-desktop.mjs                  # latest release, platform default asset
  *   node scripts/install-hop3-desktop.mjs --list           # show assets of a release
- *   node scripts/install-hop3-desktop.mjs --version v3.18.0-hop3.1
+ *   node scripts/install-hop3-desktop.mjs --version v3.18.0-hop3.2
  *   node scripts/install-hop3-desktop.mjs --asset AppImage
  *   node scripts/install-hop3-desktop.mjs --user           # rootless install (no sudo needed)
  *   node scripts/install-hop3-desktop.mjs --download-only   # fetch + verify, no install
@@ -63,7 +63,7 @@ function usage() {
     "Usage: node scripts/install-hop3-desktop.mjs [options]",
     "",
     "Options:",
-    "  --version <tag>     Release tag or version (e.g. v3.18.0-hop3.1). Default: latest.",
+    "  --version <tag>     Release tag or version (e.g. v3.18.0-hop3.2). Default: latest.",
     "  --asset <kind>      deb | rpm | pacman | AppImage | exe | dmg. Default: platform default.",
     "  --user              Rootless install (Linux deb/AppImage, macOS ~/Applications).",
     "  --install-dir <dir> Rootless install root (default ~/.local/share/Hop3).",

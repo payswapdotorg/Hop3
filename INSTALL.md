@@ -20,7 +20,7 @@ node scripts/install-hop3-desktop.mjs --smoke
 # agent account without sudo (rootless deb extraction / AppImage):
 node scripts/install-hop3-desktop.mjs --user --smoke
 # pin a release or pick an asset explicitly:
-node scripts/install-hop3-desktop.mjs --version v3.18.0-hop3.1 --asset AppImage
+node scripts/install-hop3-desktop.mjs --version v3.18.0-hop3.2 --asset AppImage
 node scripts/install-hop3-desktop.mjs --list    # show available assets + checksums
 ```
 

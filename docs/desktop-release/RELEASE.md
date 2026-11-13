@@ -1,6 +1,6 @@
 # Hop3 Desktop Release
 
-Status: implemented (first release `v3.18.0-hop3.1`).
+Status: implemented (releases `v3.18.0-hop3.1`, `v3.18.0-hop3.2`).
 
 This document specifies how Hop3 desktop installers are built, verified, and published.
 Hop3 is a modified ZCode distribution: the build extends the existing Electron packaging
