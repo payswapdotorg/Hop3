@@ -21,6 +21,14 @@ Start here:
 - [Repository working rules](HOP3_RULES.md)
 - [Architecture decisions](docs/adr/)
 
+## Install the Hop3 desktop app
+
+Hop3 ships as versioned desktop installers (Linux, Windows, macOS) built from this
+repository's ZCode base. No development environment is needed:
+[download a release installer](https://github.com/payswapdotorg/Hop3/releases), verify its
+SHA256 checksum, and follow [INSTALL.md](INSTALL.md). The release pipeline and acceptance
+gates are specified in [docs/desktop-release/RELEASE.md](docs/desktop-release/RELEASE.md).
+
 ## Product promise
 
 - **Earn:** tell Hop3 what you can do, where you can work, when you are available and what extra income you are targeting. Hop3 searches permitted sources, checks fit and payout constraints, and helps you take the next legitimate step.

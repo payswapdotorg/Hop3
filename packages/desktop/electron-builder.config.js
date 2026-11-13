@@ -299,6 +299,25 @@ function buildDesktopArtifactName(platformName, extension = "${ext}") {
   return `\${productName}-\${version}-${platformName}-\${arch}${desktopArtifactEnvSuffix}.${extension}`;
 }
 
+// 磁盘/工具受限的本地验证环境可用 ZCODE_DESKTOP_LINUX_TARGETS="AppImage,deb" 只构建子集；
+// CI 不注入时默认构建全部四个 target，与既有发布面保持一致。非法拼写直接失败，避免静默缺包。
+function resolveLinuxPackageTargets() {
+  const raw = process.env.ZCODE_DESKTOP_LINUX_TARGETS?.trim();
+  if (!raw) {
+    return ["AppImage", "deb", "rpm", "pacman"];
+  }
+  const targets = raw
+    .split(",")
+    .map((target) => target.trim())
+    .filter(Boolean);
+  const allowedTargets = new Set(["AppImage", "deb", "rpm", "pacman"]);
+  const invalidTargets = targets.filter((target) => !allowedTargets.has(target));
+  if (targets.length === 0 || invalidTargets.length > 0) {
+    throw new Error(`invalid ZCODE_DESKTOP_LINUX_TARGETS: ${raw}`);
+  }
+  return targets;
+}
+
 function runAsarCommand(args) {
   runCommand(process.execPath, [asarCliPath, ...args], {
     cwd: import.meta.dirname,
@@ -608,10 +627,13 @@ export default {
   extraMetadata: {
     version: buildMetadata.appVersion,
     zcodeProductFlavor: desktopProductIdentity.flavor,
-    homepage: "https://zcode.z.ai",
+    // 打包态 Electron app.getName() 读 asar 内 package.json 的 productName；
+    // 与 appId/executableName 同源取 identity，避免安装包壳与运行时显示名分叉。
+    productName: desktopProductIdentity.productName,
+    homepage: "https://github.com/payswapdotorg/Hop3",
     author: {
-      name: "ZCode",
-      email: "dev@zcode.z.ai",
+      name: "Hop3",
+      email: "payswapdotorg@users.noreply.github.com",
     },
   },
   // macOS 签名阶段会对 Electron Framework 下每个语言包逐个 codesign。
@@ -961,15 +983,15 @@ export default {
       : {}),
   },
   linux: {
-    target: ["AppImage", "deb", "rpm", "pacman"],
+    target: resolveLinuxPackageTargets(),
     artifactName: buildDesktopArtifactName("linux"),
     // desktop 包名是 scoped package（@zcode/desktop），electron-builder 默认会把
     // Linux executable/Icon 推成 @zcodedesktop。部分桌面环境无法按这个 icon name 命中
-    // hicolor 图标，最终回退成系统齿轮。这里固定成稳定的小写名称，让 Icon=zcode
-    // 与 /usr/share/icons/hicolor/*/apps/zcode.png 保持一致。
+    // hicolor 图标，最终回退成系统齿轮。这里固定成稳定的小写名称，让 Icon=hop3
+    // 与 /usr/share/icons/hicolor/*/apps/hop3.png 保持一致。
     executableName: desktopProductIdentity.linuxExecutableName,
     category: "Development",
-    maintainer: "ZCode <dev@zcode.z.ai>",
+    maintainer: "Hop3 <payswapdotorg@users.noreply.github.com>",
   },
   deb: {
     // 生产版与 Preview 必须是两个 dpkg package；只改可执行名仍会让安装器把另一版本当成升级替换。

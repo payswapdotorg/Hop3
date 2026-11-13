@@ -1,0 +1,356 @@
+name: release-desktop
+
+# Hop3 desktop release pipeline.
+# Triggered by version tags (v*). Builds production Hop3 installers for every
+# supported platform, runs bounded installation smoke checks, assembles
+# SHA256SUMS plus a release manifest, and publishes a GitHub Release only
+# after the required assets are verified present (fail-closed).
+# See docs/desktop-release/RELEASE.md for the full release contract.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to package (e.g. v3.18.0-hop3.1)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Production backend + production Hop3 identity (no _TEST artifact suffix).
+  ZCODE_ENV: production
+  ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+jobs:
+  build-linux:
+    name: Hop3 Linux x64 installers
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: pnpm (pinned by packageManager field)
+        uses: pnpm/action-setup@v4
+
+      - name: Node (pinned by .nvmrc) with pnpm store cache
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install packaging tools (fpm needs rpmbuild/fakeroot; pacman needs bsdtar)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends rpm fakeroot libarchive-tools zstd
+
+      - name: Bootstrap (retry: known hoisted-linker ENOENT flake)
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm bootstrap; then exit 0; fi
+            echo "::warning::pnpm bootstrap attempt ${attempt} failed — retrying"
+          done
+          exit 1
+
+      - name: Package Hop3 (AppImage, deb, rpm, pacman)
+        run: pnpm bundle:desktop -- linux x64
+
+      - name: Record build metadata
+        id: meta
+        run: |
+          version="$(node -p "require('./packages/desktop/out/metadata/build-meta.json').appVersion")"
+          commit="$(node -p "require('./packages/desktop/out/metadata/build-meta.json').buildCommitId")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke — deb package identity
+        run: |
+          set -euo pipefail
+          deb="$(ls packages/desktop/dist/Hop3-*.deb | head -n1)"
+          echo "::group::deb control"
+          dpkg-deb -f "$deb" Package Version Homepage Maintainer
+          echo "::endgroup::"
+          [ "$(dpkg-deb -f "$deb" Package)" = "hop3" ]
+          [ "$(dpkg-deb -f "$deb" Homepage)" = "https://github.com/payswapdotorg/Hop3" ]
+          dpkg-deb -x "$deb" /tmp/hop3-deb
+          test -x /tmp/hop3-deb/opt/Hop3/hop3
+          grep -q '^Name=Hop3$' /tmp/hop3-deb/usr/share/applications/*.desktop
+          grep -q '^Icon=hop3$' /tmp/hop3-deb/usr/share/applications/*.desktop
+
+      - name: Smoke — first launch (headless ozone, bounded)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/hop3-home
+          HOME=/tmp/hop3-home timeout -s KILL 60 \
+            /tmp/hop3-deb/opt/Hop3/hop3 --no-sandbox --disable-gpu --ozone-platform=headless \
+            > /tmp/hop3-launch.log 2>&1 || true
+          echo "::group::launch log tail"
+          tail -20 /tmp/hop3-launch.log || true
+          echo "::endgroup::"
+          ! grep -qE "Cannot find module|MODULE_NOT_FOUND" /tmp/hop3-launch.log
+          grep -q "version=" /tmp/hop3-launch.log
+
+      - name: Upload Hop3 Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hop3-linux-x64
+          path: |
+            packages/desktop/dist/Hop3-*.AppImage
+            packages/desktop/dist/Hop3-*.deb
+            packages/desktop/dist/Hop3-*.rpm
+            packages/desktop/dist/Hop3-*.pkg.tar.zst
+            packages/desktop/out/metadata/build-meta.json
+          retention-days: 7
+          if-no-files-found: error
+
+  build-windows:
+    name: Hop3 Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: pnpm (pinned by packageManager field)
+        uses: pnpm/action-setup@v4
+
+      - name: Node (pinned by .nvmrc) with pnpm store cache
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Bootstrap (retry: known hoisted-linker ENOENT flake)
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm bootstrap; then exit 0; fi
+            echo "::warning::pnpm bootstrap attempt ${attempt} failed — retrying"
+          done
+          exit 1
+
+      - name: Package Hop3 (NSIS installer)
+        run: pnpm bundle:desktop -- win x64
+
+      - name: Smoke — silent install, first launch (bounded)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = (Get-ChildItem "packages/desktop/dist/Hop3-*.exe" | Select-Object -First 1).FullName
+          if (-not $installer) { throw "NSIS installer not found" }
+          Write-Host "Installer: $installer"
+          $process = Start-Process -FilePath $installer -ArgumentList "/S" -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "silent install failed with $($process.ExitCode)" }
+          $appDir = Join-Path $env:LOCALAPPDATA "Programs\Hop3"
+          $appExe = Join-Path $appDir "Hop3.exe"
+          if (-not (Test-Path $appExe)) { throw "installed Hop3.exe missing at $appExe" }
+          Write-Host "Installed: $appExe"
+          $log = Join-Path $env:RUNNER_TEMP "hop3-launch.log"
+          $app = Start-Process -FilePath $appExe -ArgumentList "--no-sandbox","--ozone-platform=headless" `
+            -RedirectStandardError $log -RedirectStandardOutput "$log.out" -PassThru
+          Start-Sleep -Seconds 45
+          if ($app.HasExited) {
+            Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 30
+            throw "Hop3 exited early with code $($app.ExitCode)"
+          }
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          $logText = (Get-Content $log -Raw -ErrorAction SilentlyContinue) + (Get-Content "$log.out" -Raw -ErrorAction SilentlyContinue)
+          if ($logText -match "Cannot find module|MODULE_NOT_FOUND") { throw "missing runtime module in launch log" }
+          if ($logText -notmatch "version=") { throw "launch log lacks version banner" }
+
+      - name: Upload Hop3 Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hop3-windows-x64
+          path: |
+            packages/desktop/dist/Hop3-*.exe
+            packages/desktop/out/metadata/build-meta.json
+          retention-days: 7
+          if-no-files-found: error
+
+  build-macos:
+    name: Hop3 macOS ${{ matrix.arch }} installer
+    runs-on: macos-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: pnpm (pinned by packageManager field)
+        uses: pnpm/action-setup@v4
+
+      - name: Node (pinned by .nvmrc) with pnpm store cache
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Bootstrap (retry: known hoisted-linker ENOENT flake)
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm bootstrap; then exit 0; fi
+            echo "::warning::pnpm bootstrap attempt ${attempt} failed — retrying"
+          done
+          exit 1
+
+      - name: Package Hop3 (dmg + zip)
+        run: pnpm bundle:desktop -- mac ${{ matrix.arch }}
+
+      - name: Smoke — dmg mounts a valid Hop3.app (bounded)
+        run: |
+          set -euo pipefail
+          dmg="$(ls -t packages/desktop/dist/Hop3-*${{ matrix.arch }}*.dmg | head -n1)"
+          echo "dmg: $dmg"
+          mount_point="$(hdiutil attach -nobrowse "$dmg" | grep -o '/Volumes/.*' | head -n1)"
+          echo "mounted at: $mount_point"
+          test -d "${mount_point}/Hop3.app"
+          bundle_id="$(defaults read "${mount_point}/Hop3.app/Contents/Info" CFBundleIdentifier)"
+          echo "CFBundleIdentifier: $bundle_id"
+          [ "$bundle_id" = "io.github.payswapdotorg.hop3" ]
+          hdiutil detach "$mount_point"
+          # zip artifact carries the auto-update payload for macOS.
+          ls packages/desktop/dist/Hop3-*${{ matrix.arch }}*.zip
+
+      - name: Upload Hop3 macOS artifacts (${{ matrix.arch }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: hop3-macos-${{ matrix.arch }}
+          path: |
+            packages/desktop/dist/Hop3-*.dmg
+            packages/desktop/dist/Hop3-*.zip
+            packages/desktop/out/metadata/build-meta.json
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    name: Publish verified Hop3 release
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout tag (release notes context)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-staging
+
+      - name: Assemble checksums and manifest (fail-closed)
+        id: assets
+        run: |
+          set -euo pipefail
+          cd release-staging
+          mkdir -p assets
+          find . -name "Hop3-*" -type f -exec cp {} assets/ \;
+          cp */build-meta.json assets/build-meta.json 2>/dev/null || true
+          cd assets
+          echo "::group::release assets"
+          ls -lh .
+          echo "::endgroup::"
+          required_missing=0
+          ls Hop3-*.deb >/dev/null 2>&1 || { echo "::error::missing Linux .deb"; required_missing=1; }
+          ls Hop3-*.AppImage >/dev/null 2>&1 || { echo "::error::missing Linux .AppImage"; required_missing=1; }
+          ls Hop3-*.exe >/dev/null 2>&1 || { echo "::error::missing Windows installer"; required_missing=1; }
+          ls Hop3-*.dmg >/dev/null 2>&1 || { echo "::error::missing macOS dmg"; required_missing=1; }
+          ls build-meta.json >/dev/null 2>&1 || { echo "::error::missing build metadata"; required_missing=1; }
+          [ "$required_missing" = "0" ] || { echo "::error::release asset gate failed — refusing to publish"; exit 1; }
+          sha256sum Hop3-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          node -e '
+            const fs = require("fs");
+            const meta = JSON.parse(fs.readFileSync("build-meta.json", "utf8"));
+            const crypto = require("crypto");
+            const assets = fs.readdirSync(".").filter((n) => n.startsWith("Hop3-")).map((name) => {
+              const stat = fs.statSync(name);
+              return { name, size: stat.size, sha256: crypto.createHash("sha256").update(fs.readFileSync(name)).digest("hex") };
+            });
+            const manifest = {
+              schema: "hop3-desktop-release/1",
+              product: "Hop3",
+              version: meta.appVersion,
+              sourceCommit: meta.buildCommitId,
+              builtAt: meta.buildTime,
+              electronBuilderVersion: meta.electronBuilderVersion,
+              toolchain: { node: process.version, ci: "github-actions" },
+              assets,
+            };
+            fs.writeFileSync("release-manifest.json", JSON.stringify(manifest, null, 2) + "\n");
+            console.log(JSON.stringify(manifest, null, 2));
+          '
+
+      - name: Create draft release with assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes="$(cat <<'EOF'
+          Hop3 desktop release.
+
+          - Installers: Linux (AppImage/deb/rpm/pacman), Windows (NSIS), macOS (dmg/zip).
+          - Verify downloads against `SHA256SUMS.txt`; machine-readable manifest in `release-manifest.json`.
+          - Install instructions: `INSTALL.md` in the repository root.
+          - Unsigned first releases: on macOS right-click → Open on first launch; Windows SmartScreen may warn.
+          - Built from tag sources by the `release-desktop` workflow; upstream ZCode attribution and Apache-2.0 licensing preserved (see NOTICE.md / THIRD-PARTY-NOTICES.md).
+          EOF
+          )"
+          gh release create "$TAG" --draft --title "Hop3 $TAG" --notes "$notes" \
+            release-staging/assets/Hop3-* release-staging/assets/SHA256SUMS.txt \
+            release-staging/assets/release-manifest.json
+
+      - name: Verify published asset set, then publish (fail-closed)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          release="$(gh release view "$TAG" --json isDraft,assets --jq '{isDraft, assets: [.assets[].name]}')"
+          echo "$release"
+          draft="$(echo "$release" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.isDraft)})')"
+          asset_count="$(echo "$release" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.assets.length)})')"
+          echo "draft=$draft assets=$asset_count"
+          echo "$release" | grep -q "SHA256SUMS.txt"
+          echo "$release" | grep -q "release-manifest.json"
+          echo "$release" | grep -qE "Hop3-.*\.deb"
+          echo "$release" | grep -qE "Hop3-.*\.AppImage"
+          echo "$release" | grep -qE "Hop3-.*\.exe"
+          echo "$release" | grep -qE "Hop3-.*\.dmg"
+          gh release edit "$TAG" --draft=false
+          echo "Published Hop3 $TAG with $asset_count assets."
