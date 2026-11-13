@@ -137,6 +137,10 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: "Prefer Windows bsdtar (Git-bundled GNU tar treats D:/ as a remote host)"
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value "C:\Windows\System32"
+
       - name: "Bootstrap (retry: known hoisted-linker ENOENT flake)"
         shell: bash
         run: |
