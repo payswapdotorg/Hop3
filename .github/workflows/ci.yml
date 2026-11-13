@@ -229,7 +229,26 @@ jobs:
         # mirroring the desktop-e2e-container job's invocation shape. This
         # first invocation builds the image and prefetches the matching
         # Chromedriver, exactly like the existing job's run.
-        run: bash scripts/test-desktop-e2e-container.sh plugins-verified
+        #
+        # Bounded retry: the image build runs the Dockerfile's `pnpm install
+        # --frozen-lockfile`, which is subject to the same transient pnpm
+        # hoisted-linker ENOENT rename race the gates-and-build bootstrap
+        # step already diagnosed and retried (PR #6; observed again here on
+        # run 43381256531: ERR_PNPM_ENOENT rename
+        # 'node_modules/tsup/node_modules/_tmp_*' ->
+        # 'node_modules/tsup/node_modules/esbuild' during concurrent native
+        # postinstalls). The Dockerfile is upstream's own product file and
+        # stays untouched; the workflow-level bounded retry is the fix of
+        # choice. Each attempt emits a visible warning annotation, so a
+        # deterministic failure (three identical failures) still fails the
+        # job loudly.
+        run: |
+          for attempt in 1 2 3; do
+            if bash scripts/test-desktop-e2e-container.sh plugins-verified; then exit 0; fi
+            echo "::warning::plugins preset attempt ${attempt} failed — retrying (known pnpm hoisted-linker ENOENT race inside the image build; same family as the gates-and-build bootstrap retry)"
+            sleep 5
+          done
+          exit 1
 
       - name: "Run conversation-session-verified preset (25 admitted specs)"
         # SKIP_IMAGE_BUILD is the script's own documented repeat-run knob
