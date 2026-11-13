@@ -196,13 +196,13 @@ describe(`问号菜单应用入口（${expectedFlavor}）`, () => {
       "Copy device MID",
       "Resource manager",
       ...(production ? ["Check for updates"] : []),
-      "About ZCode",
+      "About Hop3",
     ]);
     expect(await $$('[role="menu"] [role="separator"]')).toHaveLength(1);
     await browser.saveScreenshot(join(tmpdir(), "zcode-help-export-en-light.png"));
     await assertLogExport("Export logs", "Exporting logs...");
     await openMenu();
-    await $('[role="menuitem"]*=About ZCode').click();
+    await $('[role="menuitem"]*=About Hop3').click();
     await assertAboutWindow();
   });
 
