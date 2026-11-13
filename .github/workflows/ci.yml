@@ -171,7 +171,22 @@ jobs:
         # desktop-e2e-presets job below.
         env:
           E2E_SPEC: "./test/e2e/infrastructure/smoke/container-boot.test.ts,./test/e2e/infrastructure/smoke/smoke.test.ts,./test/e2e/infrastructure/smoke/e2ecase-regression.test.ts,./test/e2e/ui-shell/navigation/task-list-archive-confirmation.test.ts"
-        run: bash scripts/test-desktop-e2e-container.sh
+        # Bounded retry: two observed same-machine transients on the PR #11
+        # docs runs (43401986960 / 43404465419) — the
+        # task-list-archive-confirmation spec flaked once on a tooltip
+        # click-intercept (its first flake in ~13 runs), and the image build
+        # hit the pnpm hoisted-linker ENOENT rename race the bootstrap and
+        # plugins steps already retry. A step-level retry with a fresh docker
+        # run addresses both classes. Same shape as the other bounded retries
+        # in this workflow: three attempts, visible warning annotation each,
+        # loud failure if deterministic.
+        run: |
+          for attempt in 1 2 3; do
+            if bash scripts/test-desktop-e2e-container.sh; then exit 0; fi
+            echo "::warning::container demo attempt ${attempt} failed — retrying (observed transients: image-build pnpm hoisted-linker ENOENT race; task-list-archive-confirmation tooltip click-intercept flake)"
+            sleep 5
+          done
+          exit 1
 
       - name: Upload E2E artifacts (reports, network capture, perf samples)
         if: always()
