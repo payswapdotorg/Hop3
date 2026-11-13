@@ -21,6 +21,7 @@ import {
   waitForV4Pane,
 } from "#e2e/helpers/v4-conversation";
 import { isOutsideClosedHistory, openClosedHistoryFolds } from "#e2e/helpers/v4-history-folds";
+import { TID_V4_TIMELINE, TID_V4_TIMELINE_BOTTOM } from "@zcode/shared/test-ids";
 
 // 恢复一次停下的 run（docs/dynamic-workflow/presentation.md「The run card」「The run pane」、
 // docs/dynamic-workflow/transcript-and-notifications.md「Reminding an idle main agent」「The time figure」、
@@ -196,9 +197,35 @@ async function expectUpstreamRequestCountEventually(
 }
 
 /**
- * 通知行是通知管线渲染出的 DOM（第一次观察到的第二层最终一致：capture 记录已落盘、
- * 完成轮已收口，而通知行仍在渲染队列里；慢 runner 上立即读数会读到 0，下一
- * 个 it 再读才看到行——与 capture 落盘滞后同族）。期望非零的通知行断言同样轮询。
+ * 把时间线带回底部并重新挂载末尾行。DWU-03 中段滚到顶验证发起轮的卡后，虚拟窗口
+ * 不再包含末尾的通知行：行没挂载（不是没渲染），30s 轮询也永远读不到（第三次
+ * 观察到的读取前置缺口，与 capture 落盘、通知行渲染同属读取时机问题）。
+ * 不在底部时优先点「回到底部」按钮（恢复跟随）；按钮不在场时按真实 wheel 意图滚到底。
+ */
+async function ensureV4TimelineAtBottom(): Promise<void> {
+  const backToBottom = $(`[data-testid="${TID_V4_TIMELINE_BOTTOM}"]`);
+  if (await backToBottom.isExisting()) {
+    await backToBottom.click().catch(() => undefined);
+    return;
+  }
+  await browser.execute((timelineTestId) => {
+    const timeline = document.querySelector<HTMLElement>(`[data-testid="${timelineTestId}"]`);
+    if (!timeline) return;
+    // 照 scrollV4TimelineToTop 的修复经验：先发真实 wheel 意图再写 scrollTop，
+    // 避免被布局保护窗口当成虚拟化校正而不改跟随状态。
+    timeline.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 600 }),
+    );
+    timeline.scrollTop = timeline.scrollHeight;
+    timeline.dispatchEvent(new Event("scroll"));
+  }, TID_V4_TIMELINE);
+}
+
+/**
+ * 通知行是通知管线渲染出的 DOM（第二层最终一致：capture 记录已落盘、完成轮已收口，
+ * 通知行仍在渲染队列里）。且它收在「已处理」折叠里、又长在虚拟列表末端：读取前既要
+ * 补开收起的折叠，也要把时间线带回底部把末尾行重新挂载。期望非零的通知行断言把
+ * 这些读取前置放进轮询本身，而不是假设首次读取时它们都已满足。
  */
 async function expectNotificationRowsEventually(
   kindLabel: string,
@@ -206,10 +233,15 @@ async function expectNotificationRowsEventually(
   timeoutMsg: string,
   timeout = 30_000,
 ): Promise<void> {
-  await browser.waitUntil(async () => (await countNotificationRows(kindLabel)) === expected, {
-    timeout,
-    timeoutMsg,
-  });
+  await browser.waitUntil(
+    async () => {
+      if ((await countNotificationRows(kindLabel)) === expected) return true;
+      await openClosedHistoryFolds();
+      await ensureV4TimelineAtBottom();
+      return false;
+    },
+    { timeout, timeoutMsg },
+  );
 }
 
 /** 完成卡四格的终值：数字刚挂载时会翻动，相邻两次读数一致才算停下。 */
@@ -571,8 +603,8 @@ describe("动态工作流 · 恢复停下的 run", () => {
         `<description>${RESUMED_BY_AGENT_NAME}</description>`,
       ],
     });
-    // 通知行渲染晚于完成轮收口（本文件已观察到的第二层最终一致）：行没带着 run 名出现
-    // 之前轮询等待，而不是只读一次。
+    // 通知行渲染晚于完成轮收口（第二层最终一致），且收在折叠里、长在虚拟列表末端：
+    // 轮询期间补开折叠并带回底部，行带着 run 名出现前不收口。
     let rowText = "";
     await browser.waitUntil(
       async () => {
@@ -581,7 +613,10 @@ describe("动态工作流 · 恢复停下的 run", () => {
           const row = rows.find((item) => (item.textContent ?? "").includes("工作流已完成"));
           return row?.textContent ?? "";
         }, NOTIFICATION_ROW);
-        return rowText.includes(RESUMED_BY_AGENT_NAME);
+        if (rowText.includes(RESUMED_BY_AGENT_NAME)) return true;
+        await openClosedHistoryFolds();
+        await ensureV4TimelineAtBottom();
+        return false;
       },
       { timeout: 30_000, timeoutMsg: "完成通知行没有最终渲染出 run 名" },
     );

@@ -297,8 +297,14 @@ jobs:
         # turn closes (resume DWU-03 read the row at 0 with the capture
         # record already present), and the amend spec's side-pane chip
         # timed out when a card re-render swallowed the open-details click
-        # — both now also poll (expectNotificationRowsEventually; re-open
-        # the pane only while the pane is provably closed). The de-advisory
+        # — both now also poll (expectNotificationRowsEventually; the amend
+        # pane wait re-opens the pane only while it is provably closed). A
+        # third read-prerequisite surfaced on the next blocking
+        # run (43520174195): DWU-03 scrolls the virtualized timeline to the
+        # top mid-test, unmounting the bottom rows — the notification row is
+        # never in the DOM no matter how long the poll waits; the row
+        # assertions now re-open closed history folds and bring the timeline
+        # back to the bottom inside the poll itself. The de-advisory
         # evidence is this step's own blocking run on the fix commits.
         env:
           SKIP_IMAGE_BUILD: "1"
