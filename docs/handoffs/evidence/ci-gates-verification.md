@@ -37,8 +37,23 @@
 - **fmt:check:** exit 1 — "Format issues found in above 1605 files", the identical count reproduced by the fifth TL session in the sandbox (deterministic drift under the lockfile's oxfmt). Advisory by design: the step is marked failed-but-allowed in the run UI and the file list is in the step log.
 - **Full workspace build: PASS** — including `packages/web` (vite, `✓ built in 16.53s`) and the `packages/desktop` renderer production bundle (vite 8.0.8 / rolldown, `✓ built in 16.87s`): the two production bundles whose peak memory SIGKILLs under the 4G dev-sandbox cgroup (STAGE-1.md §13, earn-port evidence §5). The build obligation recorded as "CI duties" is closed with runner evidence.
 
-## 4. Honest boundaries (unchanged obligations, maintainer duties)
+## 4. Honest boundaries (as of the sixth TL session; partially superseded by §5)
 
-- **Desktop E2E** (`pnpm test:e2e`, release-track matrix in `README.en.md`) — deliberately not in this workflow; maintainer duty.
+- ~~Desktop E2E~~ → the **container demo** (replay-safe default-preset specs) landed in CI with the seventh TL session, §5 below; the **release-track matrix** (Windows shards, coverage runs) and the credential-gated upstream-provider validation remain maintainer duties.
 - **Login-gated in-shell earner journey** — needs a real Z.AI account; maintainer duty.
 - **fmt drift remediation** — maintainer decision; an unrelated repo-wide reformat is out of scope by HOP3_RULES §8, so the gate stays advisory until then.
+
+## 5. Desktop E2E container job — seventh TL session (PR #8, merged `004982ee`)
+
+**What landed:** a second job `desktop-e2e-container` in the same workflow — the upstream-documented Docker demo path (`pnpm test:e2e:container` → `bash scripts/test-desktop-e2e-container.sh`) on `ubuntu-latest`: `Dockerfile.desktop-e2e` build (node:24.14.0-bookworm + Electron/Xvfb/dbus deps + frozen-lockfile install), Chromedriver prefetch (driver matching the locked Electron version), then the specs inside the container with `--network none` (`E2E_PROVIDER_HTTP_MODE=replay`). This is the first CI exercising of the **desktop Electron shell** end to end — previously only the web shell had been browser-verified (fifth TL session).
+
+**First run (43329632366) — 4 of 5 default-preset specs green, one diagnosed:**
+
+- Docker image build ~4.5 min; spec run 2m41s; `gates-and-build` fully green on the same run.
+- Green: container-boot (main window boots + default workspace created in the container virtual display, 6.1s) · smoke (v4 session pane + composer displayed, 7.4s) · e2ecase-regression (3 passing, 3 conditionally skipped, 8.9s) · task-list-archive-confirmation (20.3s).
+- **Failed by design incompatibility:** `infrastructure/smoke/upstream-provider.test.ts` is hardcoded to capture mode by `resolveUpstreamE2EHttpModeForWorker` ("Upstream provider smoke 与缺 fixture 的 manual-review 验证真实上游") — it validates the **real** upstream provider and requires `E2E_PROVIDER_API_KEY` plus live network; under replay isolation it logs `Manual review defaults to capture` and fails with 没有捕获到 上游 请求. Fix (commit `0a9519c2`): `E2E_SPEC` — the script's own documented spec-selection knob — selects `DEFAULT_E2E_SPEC` verbatim minus that entry. It stays a credential-gated maintainer check.
+- **Artifact upload bug diagnosed from the action's own debug output:** `.e2e-artifacts` is a dot-directory and `actions/upload-artifact@v4` defaults to `include-hidden-files: false` — the bind mount had produced the files but the glob matched nothing. Fix: `include-hidden-files: true` (commit `0a9519c2`).
+
+**Green run (43332419634, PR head `0a9519c2`):** `Spec Files: 4 passed, 4 total (100% completed) in 00:00:51`; artifact `desktop-e2e-artifacts.zip` uploaded successfully (235,771 bytes, ID 13996536108); `gates-and-build` green on the same run. Post-merge main run (43334615409 @ `004982ee`): **both jobs green on main** — the desktop shell gate is live for every push to `main` and every PR.
+
+**Not covered (honest, recorded in the workflow comments and the PR body):** upstream-provider real-provider validation (credential-gated); the Windows-sharded release matrix and coverage runs; the `conversation-session-verified` (25 specs) / `plugins-verified` (1 spec) replay-admitted container presets — natural follow-ups for deeper container coverage; the login-gated in-shell earner journey.
