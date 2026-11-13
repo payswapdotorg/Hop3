@@ -176,7 +176,7 @@ export class EarnApplicationStore {
       .run(values);
   }
 
-  /** 追加事件行（时间恒为当前时刻；id 随机）。 */
+  /** 追加事件行（时间恒为当前时刻；id 随机，同毫秒排序靠 rowid 插入序）。 */
   insertApplicationEventRow(applicationId: string, event: ApplicationEventWrite): void {
     this.db()
       .prepare(
@@ -195,18 +195,18 @@ export class EarnApplicationStore {
       );
   }
 
-  /** 单申请事件行（createdAt 升序）；applicationId 省略时返回全部。 */
+  /** 单申请事件行（createdAt 升序，同毫秒按 rowid 插入序）；applicationId 省略时返回全部。 */
   listApplicationEventRows(applicationId?: string): EarnApplicationEventRow[] {
     const db = this.db();
     if (applicationId === undefined) {
       return db
-        .prepare(`SELECT ${EVENT_COLUMNS} FROM earn_application_events ORDER BY created_at ASC, id ASC`)
+        .prepare(`SELECT ${EVENT_COLUMNS} FROM earn_application_events ORDER BY created_at ASC, rowid ASC`)
         .all() as unknown as EarnApplicationEventRow[];
     }
     return db
       .prepare(
         `SELECT ${EVENT_COLUMNS} FROM earn_application_events
-         WHERE application_id = ? ORDER BY created_at ASC, id ASC`,
+         WHERE application_id = ? ORDER BY created_at ASC, rowid ASC`,
       )
       .all(applicationId) as unknown as EarnApplicationEventRow[];
   }
