@@ -1,0 +1,95 @@
+name: windows-e2e-matrix
+
+# Hop3 Windows desktop E2E regression matrix (release track).
+#
+# Runs the repository's own Windows-sharded formal E2E entry
+# (`pnpm --filter @zcode/desktop test:e2e` with ZCODE_E2E_SHARD_TOTAL) on the
+# pinned VS 2022 runner image — the same toolchain family the release
+# workflow's Windows job uses for the runtime host build. Default mode is
+# the suite's own fixture replay (E2E_PROVIDER_HTTP_MODE unset); no provider
+# credentials are required or read.
+#
+# Deliberately workflow_dispatch-only for now: the full formal matrix is a
+# maintainer-triggered release-track check, not a per-push gate (the per-push
+# coverage stays in `gates` via the replay-admitted container presets).
+# Invocation evidence is recorded in the run itself (shard manifest,
+# summaries, reports are uploaded as artifacts).
+#
+# Shard guidance (docs/testing/desktop-e2e-runtime-performance.md):
+# the upstream first baseline was 2 shards / ~53 specs / ~34.5 min wall on
+# upstream hardware with per-shard maxInstances=1; hosted runners are
+# smaller, so the default here is 2 and 10 (perf-acceptance shape) is
+# available by input for release-track runs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: "Shard count for the formal E2E matrix (ZCODE_E2E_SHARD_TOTAL)"
+        default: "2"
+        required: false
+      specs:
+        description: "Optional targeted-spec constraint (ZCODE_E2E_SPEC, single spec path)"
+        default: ""
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-e2e-matrix
+  cancel-in-progress: false
+
+jobs:
+  windows-e2e:
+    name: Hop3 Windows formal E2E matrix
+    # windows-latest currently resolves to a VS 2026 image; the repository's
+    # runtime host build pins the "Visual Studio 17 2022" CMake generator, so
+    # pin the VS 2022 runner image to match the release workflow's toolchain.
+    runs-on: windows-2022
+    timeout-minutes: 300
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: pnpm (pinned by packageManager field)
+        uses: pnpm/action-setup@v4
+
+      - name: "Node (pinned by .nvmrc) with pnpm store cache"
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: "Bootstrap (retry: known hoisted-linker ENOENT flake)"
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm bootstrap; then exit 0; fi
+            echo "::warning::pnpm bootstrap attempt ${attempt} failed — retrying"
+          done
+          exit 1
+
+      - name: "Run formal E2E matrix (fixture replay, sharded)"
+        shell: bash
+        env:
+          ZCODE_E2E_SHARD_TOTAL: ${{ github.event.inputs.shards || '2' }}
+          ZCODE_E2E_SPEC: ${{ github.event.inputs.specs }}
+        run: pnpm --filter @zcode/desktop test:e2e
+
+      - name: "Normalize artifact permissions for upload"
+        if: always()
+        shell: bash
+        run: find packages/desktop/.e2e-artifacts -type d -exec chmod a+rx {} + 2>/dev/null || true
+
+      - name: Upload E2E artifacts (shard manifests, summaries, reports)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-e2e-matrix-artifacts
+          path: packages/desktop/.e2e-artifacts/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
