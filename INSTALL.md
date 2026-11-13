@@ -8,6 +8,26 @@ Installers for every release are attached to the
 [GitHub Releases](https://github.com/payswapdotorg/Hop3/releases) page, together with
 `SHA256SUMS.txt` (checksums) and `release-manifest.json` (machine-readable build provenance).
 
+## 0. One-command install (local agents)
+
+If you have Node.js >= 18 available, the local-agent install client automates
+steps 1–4 below — download, fail-closed checksum verification, OS-mechanism
+install, and an optional bounded first-launch smoke:
+
+```bash
+# from a clone of this repository:
+node scripts/install-hop3-desktop.mjs --smoke
+# agent account without sudo (rootless deb extraction / AppImage):
+node scripts/install-hop3-desktop.mjs --user --smoke
+# pin a release or pick an asset explicitly:
+node scripts/install-hop3-desktop.mjs --version v3.18.0-hop3.1 --asset AppImage
+node scripts/install-hop3-desktop.mjs --list    # show available assets + checksums
+```
+
+The script is dependency-free and never builds anything — it only downloads a
+published release. The manual steps below cover the same ground for machines
+without Node.js.
+
 ## 1. Download
 
 Pick the asset matching your OS and CPU architecture (`Hop3-<version>-<platform>-<arch>.<ext>`):

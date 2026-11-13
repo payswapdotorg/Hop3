@@ -77,6 +77,23 @@ The machine that consumes Hop3 never builds it:
 4. Install with the OS mechanism (`apt`/`dpkg`, NSIS `/S`, dmg copy, `dnf`, `pacman -U`).
 5. Launch `hop3` / `Hop3.exe` / `Hop3.app` and complete first-run configuration.
 
+The reference implementation of this contract is
+`scripts/install-hop3-desktop.mjs` (zero dependencies, Node >= 18):
+
+```bash
+node scripts/install-hop3-desktop.mjs            # latest release, platform default asset
+node scripts/install-hop3-desktop.mjs --user --smoke   # rootless install + bounded first-launch check
+```
+
+It resolves the latest published release via redirects (no GitHub API — avoids
+rate limits), cross-verifies every download against **both** `SHA256SUMS.txt`
+and `release-manifest.json` (fail-closed on disagreement or mismatch), installs
+with the OS mechanism, and supports `--user` rootless installs for agent
+accounts without sudo (deb payload extracted to `~/.local/share/Hop3/<version>`
+with a rewritten `.desktop` entry and `~/.local/bin/hop3` launcher), plus
+`--download-only`, `--list`, `--asset`, and `--version` pinning. Agents without
+Node can follow the manual steps in `INSTALL.md` instead.
+
 ## Acceptance checklist (per release)
 
 - [ ] Clean-machine install on each supported OS (CI smoke covers install + first launch).
