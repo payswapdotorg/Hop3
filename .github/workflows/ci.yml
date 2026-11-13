@@ -278,28 +278,25 @@ jobs:
         # job plus generous headroom, and the first observed run will inform
         # any adjustment.
         #
-        # Advisory on purpose — same visible-but-allowed pattern as the
-        # fmt:check step. Evidence across five runs: run 43377638853 ran
-        # this preset 25/25 green; runs 43382685315 and 43386905150 (three
-        # attempts, same runner) failed the resume spec's DWU-03/DWU-04
-        # cases on countUpstreamRequests(...) === 0 — the count helper
-        # reads the replay capture-artifact FILE, and DWU-04's named:1 a
-        # moment later proves the notice request lands between the reads:
-        # an artifact-flush eventual-consistency window the upstream spec
-        # never waits around (its admission evidence came from single-spec
-        # runs on upstream's own machines). The failure is deterministic
-        # per runner and varies across runners, so a same-runner retry
-        # cannot fix it and a blocking gate would flip red on slow-runner
-        # pushes. The failure stays VISIBLE (red step mark + annotation,
-        # artifacts always uploaded) while the 24 reliably-green specs and
-        # the plugins gate stay blocking. The maintainer fix is upstream's
-        # own: add waitUntil before the count assertions in the resume
-        # spec — an upstream product test file behind the admission
-        # discipline, deliberately not patched here.
+        # Blocking again — the eventual-consistency race is fixed at the
+        # spec. History: this step was advisory for five runs because runs
+        # 43382685315 and 43386905150 (three attempts, same runner) failed
+        # the resume spec on countUpstreamRequests(...) === 0: the count
+        # helper reads the replay capture-artifact FILE, and the network
+        # capture proxy queues each artifact write without awaiting it
+        # (writeArtifact is fire-and-forget by design), so a read taken
+        # right after the UI's turn closes can still see the pre-request
+        # file. The durable fix — applied in the resume spec now — wraps the
+        # positive exact-count assertions in expectUpstreamRequestCount-
+        # Eventually (browser.waitUntil) so they poll until the artifact
+        # reflects the already-completed turn, matching how every other
+        # capture read in the suite already waits. Zero-count assertions
+        # stay immediate by design (a lagging file cannot fail them). The
+        # de-advisory evidence is this step's own blocking run on the fix
+        # commit.
         env:
           SKIP_IMAGE_BUILD: "1"
         run: bash scripts/test-desktop-e2e-container.sh conversation-session-verified
-        continue-on-error: true
 
       - name: "Normalize artifact permissions (container writes as root; plugin test dirs land 0700)"
         # First-run observation (run 43377638853): the plugin-ui-session-ready spec

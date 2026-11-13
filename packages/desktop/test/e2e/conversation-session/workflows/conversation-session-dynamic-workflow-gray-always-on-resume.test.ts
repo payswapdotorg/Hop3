@@ -177,6 +177,24 @@ function countNotificationRows(kindLabel: string): Promise<number> {
   );
 }
 
+/**
+ * 终态计数断言（期望非零时的最终一致等待）：capture artifact 由代理异步串行落盘
+ * （network-capture-proxy 的 writeArtifact 在每个边界排队一次原子写且明确不 await），
+ * UI 侧一轮收口后文件仍可能滞后，单次立即读会在慢 runner 上读到 0（历史 24/25
+ * 失败根因）。对「恰好 N 条」的断言轮询到一致，而不是只读一次。
+ */
+async function expectUpstreamRequestCountEventually(
+  query: UpstreamRequestQuery,
+  expected: number,
+  timeoutMsg: string,
+  timeout = 30_000,
+): Promise<void> {
+  await browser.waitUntil(async () => (await countUpstreamRequests(query)) === expected, {
+    timeout,
+    timeoutMsg,
+  });
+}
+
 /** 完成卡四格的终值：数字刚挂载时会翻动，相邻两次读数一致才算停下。 */
 async function readSettledFigures(): Promise<Record<string, string>> {
   await $(COMPLETION_CARD).waitForDisplayed({ timeout: 60_000 });
@@ -254,7 +272,11 @@ describe("动态工作流 · 恢复停下的 run", () => {
     await stopFromCard(runId, "E2E_DWU_A_STOP_NOTED");
     const digest = $(digestFor(runId));
     await expect(digest.$('[data-testid="workflow-digest-resume"]')).toBeDisplayed();
-    expect(await countUpstreamRequests(terminalNotice(runId, "stopped"))).toBe(1);
+    await expectUpstreamRequestCountEventually(
+      terminalNotice(runId, "stopped"),
+      1,
+      "停止的终态通知没有最终进入 capture（期望恰好 1 条）",
+    );
     expect(await countUpstreamRequests(terminalNotice(runId, "completed"))).toBe(0);
 
     // 恢复是同一个 run：卡原地回到运行中，Resume 退场、Stop 回来，composer 徽标重新计入，
@@ -279,7 +301,11 @@ describe("动态工作流 · 恢复停下的 run", () => {
       async () => (await countUpstreamRequests(subagentAsk("E2E_DWU_A_HELD_TASK"))) === 2,
       { timeout: 60_000, timeoutMsg: "恢复后未完成的 ask 没有重新执行" },
     );
-    expect(await countUpstreamRequests(subagentAsk("E2E_DWU_A_DONE_TASK"))).toBe(1);
+    await expectUpstreamRequestCountEventually(
+      subagentAsk("E2E_DWU_A_DONE_TASK"),
+      1,
+      "恢复后做完的 ask 计数没有最终落在 1（期望不再重发）",
+    );
 
     // 脚本步骤面板：那条 world.run 的卡带 replayed 芯片（命令没有再跑一次）。
     await digest
@@ -296,8 +322,16 @@ describe("动态工作流 · 恢复停下的 run", () => {
 
     // 命令只跑过一次：副作用文件只有一行。
     expect((await readFile(COUNT_FILE, "utf8")).trim().split("\n")).toHaveLength(1);
-    expect(await countUpstreamRequests(subagentAsk("E2E_DWU_A_DONE_TASK"))).toBe(1);
-    expect(await countUpstreamRequests(subagentAsk("E2E_DWU_A_HELD_TASK"))).toBe(2);
+    await expectUpstreamRequestCountEventually(
+      subagentAsk("E2E_DWU_A_DONE_TASK"),
+      1,
+      "收口时做完的 ask 计数没有落在 1",
+    );
+    await expectUpstreamRequestCountEventually(
+      subagentAsk("E2E_DWU_A_HELD_TASK"),
+      2,
+      "收口时未完成的 ask 计数没有落在 2",
+    );
 
     // 结果拼的是第一条命中的缓存答案与重跑的答案；被停掉的那份回答没有进入结果。
     await waitForUpstreamRequest(
@@ -313,8 +347,16 @@ describe("动态工作流 · 恢复停下的 run", () => {
       "完成通知没有带上两份答案",
       30_000,
     );
-    expect(await countUpstreamRequests(terminalNotice(runId, "completed"))).toBe(1);
-    expect(await countUpstreamRequests(terminalNotice(runId))).toBe(2);
+    await expectUpstreamRequestCountEventually(
+      terminalNotice(runId, "completed"),
+      1,
+      "完成的终态通知没有最终进入 capture（期望恰好 1 条）",
+    );
+    await expectUpstreamRequestCountEventually(
+      terminalNotice(runId),
+      2,
+      "终态通知总数没有最终落在 2（停止 + 完成）",
+    );
     expect(await countNotificationRows("工作流已完成")).toBe(1);
     expect(await countNotificationRows("工作流已停止")).toBe(1);
     expect(await readSettledFigures()).toEqual({ subagents: "2", phases: "2" });
@@ -371,11 +413,27 @@ describe("动态工作流 · 恢复停下的 run", () => {
     await waitForV4AssistantMessageContaining("E2E_DWU_B_DONE", 120_000);
     await waitForV4Pane((pane) => !pane.canStop, "完成通知那一轮没有结束", 60_000);
 
-    expect(await countUpstreamRequests(subagentAsk("E2E_DWU_B_DONE_TASK"))).toBe(1);
-    expect(await countUpstreamRequests(subagentAsk("E2E_DWU_B_LAST_TASK"))).toBe(1);
+    await expectUpstreamRequestCountEventually(
+      subagentAsk("E2E_DWU_B_DONE_TASK"),
+      1,
+      "收口时做完的 ask 计数没有落在 1",
+    );
+    await expectUpstreamRequestCountEventually(
+      subagentAsk("E2E_DWU_B_LAST_TASK"),
+      1,
+      "收口时收尾的 ask 计数没有落在 1",
+    );
     // 关闭时的 stopped(interrupted) 通知随运行时关闭被丢弃：模型只读到恢复后的这一条。
-    expect(await countUpstreamRequests(terminalNotice(runId, "completed"))).toBe(1);
-    expect(await countUpstreamRequests(terminalNotice(runId))).toBe(1);
+    await expectUpstreamRequestCountEventually(
+      terminalNotice(runId, "completed"),
+      1,
+      "完成的终态通知没有最终进入 capture（期望恰好 1 条）",
+    );
+    await expectUpstreamRequestCountEventually(
+      terminalNotice(runId),
+      1,
+      "终态通知总数没有最终落在 1（重启丢弃了 stopped 通知）",
+    );
     expect(await countNotificationRows("工作流已完成")).toBe(1);
     expect(await countNotificationRows("工作流已停止")).toBe(0);
     expect(await readSettledFigures()).toEqual({ subagents: "2", phases: "3" });
@@ -393,7 +451,11 @@ describe("动态工作流 · 恢复停下的 run", () => {
     const holeNotice: UpstreamRequestQuery = {
       lastUserMessageIncludes: ["<workflow-hole>", `<run-id>${runId}</run-id>`, HOLE_ID],
     };
-    expect(await countUpstreamRequests(holeNotice)).toBe(1);
+    await expectUpstreamRequestCountEventually(
+      holeNotice,
+      1,
+      "留白通知没有最终进入 capture（期望恰好 1 条）",
+    );
 
     await stopFromCard(runId, "E2E_DWU_C_STOP_NOTED");
 
@@ -472,7 +534,11 @@ describe("动态工作流 · 恢复停下的 run", () => {
     await waitForDigest(runId, (card) => card.status === "completed", "补全后 run 没有跑完");
     await waitForV4AssistantMessageContaining("E2E_DWU_C_DONE", 120_000);
     await waitForV4Pane((pane) => !pane.canStop, "完成通知那一轮没有结束", 60_000);
-    expect(await countUpstreamRequests(terminalNotice(runId, "completed"))).toBe(1);
+    await expectUpstreamRequestCountEventually(
+      terminalNotice(runId, "completed"),
+      1,
+      "完成的终态通知没有最终进入 capture（期望恰好 1 条）",
+    );
     expect(await countNotificationRows("工作流已完成")).toBe(1);
   });
 
