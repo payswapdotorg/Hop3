@@ -178,6 +178,8 @@ function normalizeFilters(filters: OpportunityFilters): OpportunityFilters {
 export function useEarnOpportunities(
   service: IEarnService | null,
   filters: OpportunityFilters = {},
+  /** Issue #13（B）：默认筛选下 totals 查询保持 idle，避免与主查询重复拉取等价 payload。 */
+  enabled = true,
 ): EarnQueryResult<OpportunityCardWithNotes[]> {
   const { source, eligibility, status, q } = filters;
   const fetcher = useCallback(
@@ -185,7 +187,7 @@ export function useEarnOpportunities(
       svc.listOpportunities(normalizeFilters({ source, eligibility, status, q })),
     [source, eligibility, status, q],
   );
-  return useEarnResource(service, "opportunities", fetcher, true);
+  return useEarnResource(service, "opportunities", fetcher, enabled);
 }
 
 export function useEarnOpportunityDetail(

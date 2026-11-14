@@ -429,6 +429,7 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
   handleOpenBrowserPermissionSettings,
   handleOpenWhiteboard,
   handleOpenDeveloperTools,
+  handleOpenEarn,
   handleOpenFileManager,
   handleNavigateFileManager,
   handleOpenPluginMarket,
@@ -2279,6 +2280,7 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
       onOpenBrowserPermissionSettings={handleOpenBrowserPermissionSettings}
       onOpenWhiteboard={handleOpenWhiteboard}
       onOpenDeveloperTools={handleOpenDeveloperTools}
+      onOpenEarn={handleOpenEarn}
       onOpenFileManager={handleOpenFileManager}
       onNavigateFileManager={handleNavigateFileManager}
       onOpenPluginMarket={handleOpenPluginMarket}
@@ -2380,6 +2382,7 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
       goBackShortcutLabel={goBackShortcutLabel}
       goForwardShortcutLabel={goForwardShortcutLabel}
       onOpenCommandCenter={handleOpenCommandCenter}
+      onOpenEarn={handleOpenEarn}
       onOpenAutomations={handleOpenAutomations}
       automationsActive={workspaceMainView === "automations"}
       onOpenPluginStore={handleOpenPluginStore}

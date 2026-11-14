@@ -52,6 +52,7 @@ import {
   openWorkflowWorkspaceSidePane,
   openWorkflowArtifactSidePane,
   activateDeveloperToolsSidePane,
+  activateEarnSidePane,
   activateExtensionViewSidePane,
   moveAppScopedExtensionViewTabs,
   activateExtensionLogsSidePane,
@@ -1280,6 +1281,19 @@ export function useAppPanels(options: {
     });
   }, [commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath]);
 
+  // Hop3 Earn（Issue #13）：固定 id 的 workspace 级侧栏标签 —— 重复打开聚焦既有 Earn 标签。
+  // 不触发任何 provider 同步；数据读取仍由 EarnPage 内的数据 hooks 在挂载时异步完成。
+  const handleOpenEarn = useCallback(() => {
+    revealSidePaneForCurrentOwner();
+    commitOpenedSidePaneState((current) => {
+      const next = activateEarnSidePane(current);
+      logger.info(
+        `[App] 打开右侧面板 mode=hop3-earn workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
+      );
+      return next;
+    });
+  }, [commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath]);
+
   const handleOpenTerminalTab = useCallback(() => {
     if (isOfficeMode) return;
     revealSidePaneForCurrentOwner();
@@ -2134,6 +2148,7 @@ export function useAppPanels(options: {
     handleOpenTreemapping,
     handleOpenWhiteboard,
     handleOpenDeveloperTools,
+    handleOpenEarn,
     handleOpenExtensionView,
     handleOpenExtensionLogs,
     handleOpenPluginMarket,

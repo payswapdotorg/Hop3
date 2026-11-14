@@ -49,7 +49,6 @@ import { useOpenRewards } from "@/rewards/RewardsProvider.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
-import { useTabStore } from "@/store/TabStoreProvider.js";
 import { normalizeInterfaceMode } from "@/lib/interfaceMode.js";
 import type { Theme } from "@/useTheme.js";
 import { WorkspaceWebRemoteControlTrigger } from "@/WorkspaceWebRemoteControlTrigger.js";
@@ -100,6 +99,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   onSettingsButtonClick,
   onUsageClick,
   onUpgradeClick,
+  onOpenEarn,
   onLogin,
   onLogout,
   settingsButtonMode = "settings",
@@ -121,6 +121,8 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   onUpgradeClick?: Parameters<
     typeof WorkspaceSidebarFooterUsageSummaryContent
   >[0]["onUpgradeClick"];
+  /** Hop3 Earn（Issue #13）：打开右侧面板的 Earn 标签；无侧栏宿主（如设置页）时不渲染入口。 */
+  onOpenEarn?: () => void;
   onLogin?: () => void;
   onLogout?: () => void;
   settingsButtonMode?: "settings" | "back";
@@ -136,7 +138,6 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   const { intl } = useZCodeIntl();
   const platform = usePlatform();
   const openRewards = useOpenRewards();
-  const openEarnTab = useTabStore((state) => state.openEarnTab);
   const interfaceMode = useZCodeStore((state) => state.interfaceMode);
   const setInterfaceMode = useSetInterfaceModeWithTelemetry(platform, "app.profile");
   const zoomInShortcutLabel = useShortcutCommandLabel("zoomIn");
@@ -476,20 +477,22 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
               compact
             />
           ) : null}
-          {/* Hop3 Earn 入口：打开窗口内唯一的 Earn 页签（Stage 1 §2）。
-              与设置齿轮并排；页签激活后面板覆盖 workspace（或独立全屏）。 */}
-          <ControlHintTooltip title={earnButtonLabel}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-lg"
-              data-testid="earn-entry-button"
-              aria-label={earnButtonLabel}
-              onClick={openEarnTab}
-            >
-              <CircleDollarSign className="size-4" />
-            </Button>
-          </ControlHintTooltip>
+          {/* Hop3 Earn 入口（Issue #13）：打开右侧面板的 Earn 标签（workspace 级、幂等重复打开）。
+              无侧栏宿主（如设置页独立面）不传 onOpenEarn，入口随之不渲染 —— 不再有全屏 Earn 面。 */}
+          {onOpenEarn ? (
+            <ControlHintTooltip title={earnButtonLabel}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                data-testid="earn-entry-button"
+                aria-label={earnButtonLabel}
+                onClick={onOpenEarn}
+              >
+                <CircleDollarSign className="size-4" />
+              </Button>
+            </ControlHintTooltip>
+          ) : null}
           <ControlHintTooltip title={settingsButtonLabel}>
             <Button
               type="button"

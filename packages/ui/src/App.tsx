@@ -250,6 +250,7 @@ export function App({
     handleOpenGit,
     handleOpenWhiteboard,
     handleOpenDeveloperTools,
+    handleOpenEarn,
     handleOpenExtensionView,
     handleOpenExtensionLogs,
     handleOpenFileManager,
@@ -1391,6 +1392,7 @@ export function App({
             handleOpenBrowserPermissionSettings={handleOpenBrowserPermissionSettings}
             handleOpenWhiteboard={handleOpenWhiteboard}
             handleOpenDeveloperTools={handleOpenDeveloperTools}
+            handleOpenEarn={handleOpenEarn}
             handleOpenFileManager={handleOpenFileManager}
             handleNavigateFileManager={handleNavigateFileManager}
             handleOpenPluginMarket={handleOpenPluginMarket}

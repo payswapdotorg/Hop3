@@ -24,8 +24,6 @@ import {
 import { isSameWorkspaceTab } from "@/store/tabWorkspaceIdentity.js";
 
 export const SETTINGS_TAB_ID = "__settings__" satisfies TabId;
-/** Hop3 Earn 面板页签 ID（窗口内唯一；不持久化）。 */
-export const EARN_TAB_ID = "__earn__" satisfies TabId;
 
 export type WorkspaceAvailability = "available" | "unavailable-local-directory";
 
@@ -35,13 +33,7 @@ export interface SettingsTabState {
   label: "settings";
 }
 
-/** Hop3 Earn 面板页签（Stage 1 §2）；kind 与 hop3-earn-ui 契约的 EARN_TAB_KIND 一致。 */
-export interface EarnTabState {
-  id: typeof EARN_TAB_ID;
-  /** "hop3-earn"（EARN_TAB_KIND）；不加 import 以免反向依赖受管模块。 */
-  kind: "hop3-earn";
-  label: "earn";
-}
+/** Hop3 Earn（Issue #13）：窗口级 Earn 页签已迁移为右侧面板标签（lib/workspaceSidePane.ts EarnSidePaneTab）；此处不再持有 Earn 页签状态。 */
 
 export interface WorkspaceTabState extends TabState {
   kind: "workspace";
@@ -81,7 +73,7 @@ export interface RestorableWorkspaceTab {
   workspacePurpose?: WorkspacePurpose;
 }
 
-export type WindowTabState = WorkspaceTabState | SettingsTabState | EarnTabState;
+export type WindowTabState = WorkspaceTabState | SettingsTabState;
 
 export function isWorkspaceTab(tab: WindowTabState): tab is WorkspaceTabState {
   return tab.kind === "workspace";
@@ -108,11 +100,6 @@ export function isWorkspaceReadOnly(
 
 export function isSettingsTab(tab: WindowTabState): tab is SettingsTabState {
   return tab.kind === "settings";
-}
-
-/** Earn 面板页签守卫（guard-based narrowing；与 settings 同款范式）。 */
-export function isEarnTab(tab: WindowTabState): tab is EarnTabState {
-  return tab.kind === "hop3-earn";
 }
 
 // ============================================================================
@@ -154,8 +141,6 @@ export interface TabStoreState {
   reorderWorkspaceTabs: (fromIndex: number, toIndex: number) => void;
   /** 打开设置标签页（窗口内唯一） */
   openSettingsTab: () => void;
-  /** 打开 Hop3 Earn 标签页（窗口内唯一；不持久化，重启不恢复） */
-  openEarnTab: () => void;
   /** 通过 workspace 路径激活 tab（跨窗口 focus 用），返回是否找到 */
   activateTabByPath: (path: string, options?: { workspaceIdentity?: string }) => boolean;
   /** 切换 workspace 的展开/收起态 */
@@ -240,14 +225,6 @@ function createSettingsTab(): SettingsTabState {
     id: SETTINGS_TAB_ID,
     kind: "settings",
     label: "settings",
-  };
-}
-
-function createEarnTab(): EarnTabState {
-  return {
-    id: EARN_TAB_ID,
-    kind: "hop3-earn",
-    label: "earn",
   };
 }
 
@@ -624,23 +601,6 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
       set((state) => ({
         tabs: [...state.tabs, settingsTab],
         activeTabId: settingsTab.id,
-      }));
-    },
-
-    // Earn 页签与 settings 同款 open 动作：窗口内唯一、激活但保留 activeWorkspace
-    // 投影（workspace 覆盖层语义），且 restoreTabs 只恢复 workspace 页签 —— Earn
-    // 面板从不跨重启持久化。
-    openEarnTab: () => {
-      const existing = get().tabs.find(isEarnTab);
-      if (existing) {
-        set({ activeTabId: existing.id });
-        return;
-      }
-
-      const earnTab = createEarnTab();
-      set((state) => ({
-        tabs: [...state.tabs, earnTab],
-        activeTabId: earnTab.id,
       }));
     },
 

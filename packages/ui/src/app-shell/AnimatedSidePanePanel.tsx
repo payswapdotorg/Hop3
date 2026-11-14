@@ -45,6 +45,7 @@ import { WhiteboardPane } from "@/WhiteboardPane.js";
 import { ModelTrajectoryPane } from "@/ModelTrajectoryPane.js";
 import { PluginStorePage } from "@/settings/PluginStorePage.js";
 import { DeveloperToolsPane } from "@/DeveloperToolsPane.js";
+import { EarnPage } from "@/hop3-earn/index.js";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 
@@ -119,6 +120,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
   BugIcon,
   ChevronRightIcon,
+  CircleDollarSignIcon,
   FileDiffIcon,
   FolderOpenIcon,
   EarthIcon,
@@ -346,6 +348,7 @@ export function AnimatedSidePanePanel({
   onOpenBrowserPermissionSettings,
   onOpenWhiteboard: _onOpenWhiteboard,
   onOpenDeveloperTools,
+  onOpenEarn,
   onOpenFileManager,
   onNavigateFileManager,
   onOpenPluginMarket,
@@ -438,6 +441,8 @@ export function AnimatedSidePanePanel({
   onOpenBrowserPermissionSettings?: (origin: string) => void;
   onOpenWhiteboard: () => void;
   onOpenDeveloperTools: () => void;
+  /** Hop3 Earn（Issue #13）：无侧栏宿主（如设置页）时缺省，入口与 launcher 行随之隐藏。 */
+  onOpenEarn?: () => void;
   onOpenFileManager: (target?: FileManagerTarget) => void;
   onNavigateFileManager: (tabId: string, source: CodeViewerSource) => void;
   onOpenPluginMarket?: () => void;
@@ -798,11 +803,19 @@ export function AnimatedSidePanePanel({
       icon: BugIcon,
       onOpen: onOpenDeveloperTools,
     },
+    earn: {
+      id: "earn",
+      label: intl.formatMessage({ id: "earn.title" }),
+      description: intl.formatMessage({ id: "sidePane.launcher.earn" }),
+      icon: CircleDollarSignIcon,
+      onOpen: () => onOpenEarn?.(),
+    },
   };
   const openTabLauncherItems: OpenTabLauncherItem[] = resolveOpenTabLauncherItemIds({
     canOpenSelectionSideConversation,
     canOpenSites,
     developerToolsEnabled,
+    earnEnabled: Boolean(onOpenEarn),
     hasReviewTab,
     supportsEmbeddedBrowser,
   })
@@ -931,6 +944,7 @@ export function AnimatedSidePanePanel({
           id: "developerTools.title",
         }),
         extensionLogsTitle: intl.formatMessage({ id: "extensions.logs.title" }),
+        earnTitle: intl.formatMessage({ id: "earn.title" }),
         browserPermissionsTitle: intl.formatMessage({
           id: "browser.permission.settings",
         }),
@@ -1424,6 +1438,17 @@ export function AnimatedSidePanePanel({
                               enabled={isVisible && tab.id === contentActiveTabId}
                             />
                           </ServiceProvider>
+                        ) : tab.type === "earn" ? (
+                          <ScopedErrorBoundary
+                            scope="earn-page"
+                            resetKeys={[workspaceKey]}
+                            variant="panel"
+                            className="h-full min-h-0"
+                          >
+                            <ServiceProvider services={services}>
+                              <EarnPage />
+                            </ServiceProvider>
+                          </ScopedErrorBoundary>
                         ) : tab.type === "terminal" ? (
                           <SidePaneTerminalPane
                             services={services}

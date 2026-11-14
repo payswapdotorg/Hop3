@@ -347,6 +347,8 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   handleOpenBrowserPermissionSettings: (origin: string) => void;
   handleOpenWhiteboard: () => void;
   handleOpenDeveloperTools: () => void;
+  /** Hop3 Earn（Issue #13）：打开/聚焦右侧面板的 Earn 标签。 */
+  handleOpenEarn: () => void;
   handleOpenFileManager: (target?: FileManagerTarget) => void;
   handleNavigateFileManager: (tabId: string, source: CodeViewerSource) => void;
   handleOpenPluginMarket: () => void;

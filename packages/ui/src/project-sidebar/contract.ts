@@ -159,6 +159,8 @@ export interface ProjectSidebarProps {
   goBackShortcutLabel?: string;
   goForwardShortcutLabel?: string;
   onOpenCommandCenter: () => void;
+  /** Hop3 Earn（Issue #13）：打开右侧面板的 Earn 标签；无侧栏宿主时不传，footer 入口随之隐藏。 */
+  onOpenEarn?: () => void;
   onOpenRepoWiki?: () => void;
   repoWikiActive?: boolean;
   onOpenAutomations?: () => void;

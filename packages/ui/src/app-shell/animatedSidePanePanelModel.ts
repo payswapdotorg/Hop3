@@ -10,6 +10,7 @@ export type OpenTabLauncherItemId =
   | "review"
   | "terminal"
   | "browser"
+  | "earn"
   | "developer-tools";
 
 export function resolveOpenTabLauncherItemIds({
@@ -18,12 +19,15 @@ export function resolveOpenTabLauncherItemIds({
   canOpenSelectionSideConversation = false,
   canOpenSites = false,
   supportsEmbeddedBrowser = true,
+  earnEnabled = false,
 }: {
   developerToolsEnabled: boolean;
   hasReviewTab: boolean;
   canOpenSelectionSideConversation?: boolean;
   canOpenSites?: boolean;
   supportsEmbeddedBrowser?: boolean;
+  /** Hop3 Earn（Issue #13）：有侧栏宿主回调时才提供 launcher 行。 */
+  earnEnabled?: boolean;
 }): OpenTabLauncherItemId[] {
   const itemIds: OpenTabLauncherItemId[] = ["files"];
 
@@ -32,6 +36,11 @@ export function resolveOpenTabLauncherItemIds({
   }
 
   itemIds.push("terminal");
+
+  // Hop3 Earn 与 Browser/Terminal 同条 launcher（Issue #13）；无宿主回调时不出现。
+  if (earnEnabled) {
+    itemIds.push("earn");
+  }
 
   if (!hasReviewTab) {
     itemIds.push("review");
