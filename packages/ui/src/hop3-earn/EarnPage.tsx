@@ -12,14 +12,11 @@
  */
 
 import * as React from "react";
-import { ArrowLeft, CircleDollarSign } from "lucide-react";
+import { CircleDollarSign } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge.js";
-import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { useTabStore } from "@/store/TabStoreProvider.js";
-import { isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
 import {
   ECONOMICS_DISCLAIMER,
   NO_AUTO_SUBMIT_NOTICE,
@@ -70,26 +67,6 @@ export function EarnPage() {
   const { service } = useEarnService();
   const [section, setSection] = React.useState<EarnSectionKey>("inbox");
 
-  const activeWorkspacePath = useTabStore((state) => state.activeWorkspacePath);
-  const activeWorkspaceIdentity = useTabStore((state) => state.activeWorkspaceIdentity);
-  const activeTabId = useTabStore((state) => state.activeTabId);
-  const tabs = useTabStore((state) => state.tabs);
-  const activateTab = useTabStore((state) => state.activateTab);
-
-  const goBackTarget = React.useMemo(() => {
-    if (!activeWorkspacePath) return null;
-    const workspaceIdentity = activeWorkspaceIdentity ?? undefined;
-    const matching = tabs.filter(
-      (tab): tab is WorkspaceTabState =>
-        isWorkspaceTab(tab) && tab.workspacePath === activeWorkspacePath,
-    );
-    const tab =
-      matching.find((t) =>
-        workspaceIdentity ? t.workspaceIdentity === workspaceIdentity : !t.workspaceIdentity,
-      ) ?? matching[0] ?? null;
-    return tab && tab.id !== activeTabId ? tab : null;
-  }, [activeWorkspacePath, activeWorkspaceIdentity, tabs, activeTabId]);
-
   const goToApplications = React.useCallback(() => setSection("applications"), []);
 
   const tabRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
@@ -134,19 +111,6 @@ export function EarnPage() {
             <Badge variant="outline" className="hidden text-success sm:inline-flex">
               {intl.formatMessage({ id: "earn.stage" })}
             </Badge>
-            {goBackTarget ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => activateTab(goBackTarget.id)}
-                aria-label={intl.formatMessage({ id: "earn.backToWorkspace" })}
-              >
-                <ArrowLeft aria-hidden="true" />
-                <span className="hidden sm:inline">
-                  {intl.formatMessage({ id: "earn.backToWorkspace" })}
-                </span>
-              </Button>
-            ) : null}
           </div>
         </div>
       </header>

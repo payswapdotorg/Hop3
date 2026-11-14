@@ -130,6 +130,15 @@ export interface DeveloperToolsSidePaneTab {
   openedAt?: number;
 }
 
+/** Hop3 Earn（Issue #13）：右侧面板固定 id 标签，workspace 级可见性 —— 每 workspace 一个。 */
+export interface EarnSidePaneTab {
+  id: "earn";
+  type: "earn";
+  ownerTaskId?: string | null;
+  workspaceKey?: string | null;
+  openedAt?: number;
+}
+
 export interface TerminalSidePaneTab {
   id: string;
   type: "terminal";
@@ -594,7 +603,8 @@ export type WorkspaceSidePaneTab =
   | WorkflowRunDirectorySidePaneTab
   | WorkflowActorSessionSidePaneTab
   | WorkflowWorkspaceSidePaneTab
-  | WorkflowArtifactSidePaneTab;
+  | WorkflowArtifactSidePaneTab
+  | EarnSidePaneTab;
 
 /**
  * Browser/browser-use 的页面与 CDP 生命周期依赖 `<webview>` 持续连接 DOM。
@@ -1186,6 +1196,8 @@ export function isSidePaneTabVisibleInScope(
   switch (tab.type) {
     case "git":
     case "developer-tools":
+    // Hop3 Earn（Issue #13）：工作区级标签，与 developer-tools 同组 —— 切换对话仍可见、切换工作区隔离。
+    case "earn":
     // 扩展视图是工作区级（docs/plugins/extension-host.md §8）：草稿首发、切换会话后保留。
     case "extension-view":
     // 扩展日志同样是工作区级（§16.8）。
@@ -1904,6 +1916,21 @@ export function activateDeveloperToolsSidePane(
   current: WorkspaceSidePaneState | null,
 ): WorkspaceSidePaneState {
   return activateSidePaneTab(current, createDeveloperToolsSidePaneTab());
+}
+
+/** Hop3 Earn（Issue #13）：打开或聚焦右侧面板的 Earn 标签（固定 id，幂等重复打开）。 */
+export function activateEarnSidePane(
+  current: WorkspaceSidePaneState | null,
+): WorkspaceSidePaneState {
+  return activateSidePaneTab(current, createEarnSidePaneTab());
+}
+
+function createEarnSidePaneTab(): EarnSidePaneTab {
+  return {
+    id: "earn",
+    type: "earn",
+    openedAt: Date.now(),
+  };
 }
 
 /** 打开或聚焦扩展日志标签（§16.8）：固定 id，每个侧栏一个。 */

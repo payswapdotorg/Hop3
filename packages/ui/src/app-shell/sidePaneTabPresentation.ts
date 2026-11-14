@@ -10,6 +10,8 @@ export interface SidePaneTabPresentationLabels {
   whiteboardTitle: string;
   modelTrajectoryTitle: string;
   developerToolsTitle: string;
+  /** Hop3 Earn（Issue #13）：右侧面板 Earn 标签标题。 */
+  earnTitle: string;
   /** 扩展日志标签（docs/plugins/extension-host.md §16.8）。 */
   extensionLogsTitle: string;
   pluginMarketTitle: string;
@@ -84,6 +86,9 @@ export function getSidePaneTabSearchHint(tab: WorkspaceSidePaneTab): string {
   if (tab.type === "developer-tools") {
     return "developer tools token debug network status request response headers";
   }
+  if (tab.type === "earn") {
+    return "hop3 earn opportunities inbox saved applications profile sources";
+  }
   if (tab.type === "terminal" || tab.type === "bash-output")
     return `${tab.title} terminal shell command`;
   if (tab.type === "file-manager") return `${tab.target.workspacePath} ${tab.source?.path ?? ""}`;
@@ -108,6 +113,7 @@ export function getLocalizedSidePaneTabTitle(
         "whiteboard.title": labels.whiteboardTitle,
         "modelTrajectory.title": labels.modelTrajectoryTitle,
         "developerTools.title": labels.developerToolsTitle,
+        "earn.title": labels.earnTitle,
         "extensions.logs.title": labels.extensionLogsTitle,
         "workspace.openPluginsSettings": labels.pluginMarketTitle,
         "terminal.title": labels.terminalTitle,
@@ -153,6 +159,7 @@ export function getSidePaneTabTypeLabel(
   if (tab.type === "whiteboard") return labels.whiteboardTitle;
   if (tab.type === "model-trajectory") return labels.modelTrajectoryTitle;
   if (tab.type === "developer-tools") return labels.developerToolsTitle;
+  if (tab.type === "earn") return labels.earnTitle;
   if (tab.type === "terminal" || tab.type === "bash-output") return labels.terminalTitle;
   return labels.codeViewerTitle;
 }

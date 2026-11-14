@@ -10,6 +10,7 @@ import * as React from "react";
 import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input.js";
+import { Button } from "@/components/ui/button.js";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,12 @@ const STATUS_FILTER_OPTIONS = [
   { value: "expired", key: "earn.inbox.filter.status.expired" },
 ] as const;
 
+/**
+ * Issue #13（B）：inbox 一次渲染分块上限。超出部分用显式 show-more 控制，
+ * 避免大列表单帧全量挂载；筛选/搜索变化时窗口重置。
+ */
+const INBOX_RENDER_CHUNK = 60;
+
 export function InboxSection({
   service,
   onGoToApplications,
@@ -73,22 +80,36 @@ export function InboxSection({
 
   const [selected, setSelected] = React.useState<OpportunityCardWithNotes | null>(null);
   const [detailOpen, setDetailOpen] = React.useState(false);
+  const [visibleCount, setVisibleCount] = React.useState(INBOX_RENDER_CHUNK);
 
   React.useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQ(search.trim()), 350);
     return () => window.clearTimeout(t);
   }, [search]);
 
+  // Issue #13（B）：筛选/搜索变化时重置渲染窗口，避免新结果集仍带着旧的大窗口。
+  React.useEffect(() => {
+    setVisibleCount(INBOX_RENDER_CHUNK);
+  }, [source, eligibility, status, debouncedQ]);
+
   const filters = { source, eligibility, status, q: debouncedQ };
   const query = useEarnOpportunities(service, filters);
-  const allQuery = useEarnOpportunities(service, {});
+  // Issue #13（B）：默认筛选下 totals 查询与主查询等价（normalizeFilters 后同 payload），
+  // 保持 idle 不重复拉取；仅在有激活筛选时启用以展示「N of M」计数。
+  const hasActiveFilter =
+    source !== "all" || eligibility !== "all" || status !== "all" || debouncedQ !== "";
+  const allQuery = useEarnOpportunities(service, {}, hasActiveFilter);
   const applicationsQuery = useEarnApplications(service);
   const sourcesQuery = useEarnSources(service);
 
   const opportunities = query.data ?? [];
-  const total = allQuery.data?.length ?? null;
-  const savedCount = (allQuery.data ?? []).filter((o) => o.saved).length;
+  // 默认筛选时 shown 即全量 —— 直接用主查询数据，不引入第二个请求。
+  const total = hasActiveFilter ? (allQuery.data?.length ?? null) : opportunities.length;
+  const savedCount = hasActiveFilter
+    ? (allQuery.data ?? []).filter((o) => o.saved).length
+    : opportunities.filter((o) => o.saved).length;
   const appCount = applicationsQuery.data?.length ?? null;
+  const visibleOpportunities = opportunities.slice(0, visibleCount);
 
   let lastSync: Date | null = null;
   for (const s of sourcesQuery.data ?? []) {
@@ -175,7 +196,10 @@ export function InboxSection({
           <span>{intl.formatMessage({ id: "earn.inbox.counts.loading" })}</span>
         ) : (
           <span>
-            {intl.formatMessage({ id: "earn.inbox.counts.shown" }, { shown: opportunities.length })}
+            {intl.formatMessage(
+              { id: "earn.inbox.counts.shown" },
+              { shown: visibleOpportunities.length },
+            )}
             {total != null ? ` · ${intl.formatMessage({ id: "earn.inbox.counts.ofTotal" }, { total })}` : ""}
             {savedCount > 0
               ? ` · ${intl.formatMessage({ id: "earn.inbox.counts.saved" }, { count: savedCount })}`
@@ -215,16 +239,35 @@ export function InboxSection({
           hint={intl.formatMessage({ id: "earn.inbox.empty.hint" })}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {opportunities.map((opportunity) => (
-            <OpportunityCard
-              key={opportunity.id}
-              service={service}
-              opportunity={opportunity}
-              onOpen={openDetail}
-              onGoToApplications={onGoToApplications}
-            />
-          ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {visibleOpportunities.map((opportunity) => (
+              <OpportunityCard
+                key={opportunity.id}
+                service={service}
+                opportunity={opportunity}
+                onOpen={openDetail}
+                onGoToApplications={onGoToApplications}
+              />
+            ))}
+          </div>
+          {/* Issue #13（B）：分块渲染的显式 show-more；剩余数量来自同一查询，不虚构。 */}
+          {opportunities.length > visibleCount ? (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setVisibleCount((count) => Math.min(count + INBOX_RENDER_CHUNK, opportunities.length))
+                }
+              >
+                {intl.formatMessage(
+                  { id: "earn.inbox.showMore" },
+                  { count: opportunities.length - visibleCount },
+                )}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
 

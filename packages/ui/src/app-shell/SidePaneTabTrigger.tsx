@@ -11,6 +11,7 @@ import {
   PuzzleIcon,
   BotMessageSquareIcon,
   BugIcon,
+  CircleDollarSignIcon,
   FileIcon,
   FileCode2Icon,
   FileDiffIcon,
@@ -355,6 +356,11 @@ export function SidePaneTabIcon({ tab }: { tab: WorkspaceSidePaneTab }) {
     return <BugIcon className="size-3.5" />;
   }
 
+  // Hop3 Earn（Issue #13）：与侧栏 footer 入口同枚 CircleDollarSign，tab 与入口图标一致、点开不跳变。
+  if (tab.type === "earn") {
+    return <CircleDollarSignIcon className="size-3.5" />;
+  }
+
   if (tab.type === "terminal" || tab.type === "bash-output") {
     return <SquareTerminalIcon className="size-3.5" />;
   }
@@ -570,6 +576,11 @@ export function getSidePaneTabTitle(
 
   if (tab.type === "developer-tools") {
     return formatMessage({ id: "developerTools.title" });
+  }
+
+  // Hop3 Earn（Issue #13）：tab 标题用页头同名 earn.title（en-US/zh-CN 已有，其余语言回退 en-US）。
+  if (tab.type === "earn") {
+    return formatMessage({ id: "earn.title" });
   }
 
   if (tab.type === "terminal" || tab.type === "bash-output") {

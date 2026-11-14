@@ -7,6 +7,3 @@
  */
 // UI 模块对服务层的唯一类型入口（managed-worktrees 同款范式）。
 export type { IEarnService } from "@zcode/services";
-
-/** Earn tab 的 tabStore kind（Root 渲染分支据它分发）。 */
-export const EARN_TAB_KIND = "hop3-earn" as const;
