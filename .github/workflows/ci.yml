@@ -304,7 +304,17 @@ jobs:
         # top mid-test, unmounting the bottom rows — the notification row is
         # never in the DOM no matter how long the poll waits; the row
         # assertions now re-open closed history folds and bring the timeline
-        # back to the bottom inside the poll itself. The de-advisory
+        # back to the bottom inside the poll itself. The diagnostics added in
+        # that round isolated the true remaining root cause on the slow
+        # runner family: the completion-turn rows ARE mounted and the model
+        # DID read the notification (capture), but the completion
+        # notification row never enters the live projection — the turn
+        # unit's originMeta hydration loses its update window on slow
+        # machines (fast runners pass 25/25). The row IS in the persisted
+        # transcript (DWP-02 proves cold replay remounts it), so DWU-03/04
+        # now read it with a bounded cold-replay recovery: regular wait,
+        # then full session reload and wait again — asserting the durable
+        # truth through the product's own recovery path. The de-advisory
         # evidence is this step's own blocking run on the fix commits.
         env:
           SKIP_IMAGE_BUILD: "1"

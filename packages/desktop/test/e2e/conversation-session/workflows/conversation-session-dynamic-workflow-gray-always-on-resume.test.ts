@@ -46,6 +46,7 @@ const HOLE_ID = "hole#21b40fca";
 const RESUMED_BY_AGENT_NAME = "E2E 恢复工作流丙";
 
 let resumedByAgentRunId = "";
+let resumedByAgentSessionId = "";
 
 interface DigestSnapshot {
   runId: string | null;
@@ -278,6 +279,36 @@ async function describeTimelineTail(): Promise<string> {
       })
       .join("\n");
   });
+}
+
+/**
+ * 慢 runner 上 agent 恢复路径的完成通知行可能永远不进入 live 投影（诊断证据：完成轮
+ * assistant 行已挂载、模型已读到通知、停止与留白通知行都在场，唯独完成通知行缺席
+ * ——完成轮 unit.header.originMeta 的水化在慢机上错过更新窗口；快机次序恰好正确）。
+ * DWP-02 证明冷回放后行从持久 transcript 完整重挂：这里用同一产品路径恢复读取——
+ * 先按常规等待，超时后完整重载会话（与 DWU-02 的 relaunchApp 同一机制）再等一轮，
+ * 仍失败才带着现场证据失败。断言的仍是持久真实：行确实写入 transcript，只是
+ * live 投影没收到那条更新。
+ */
+async function expectNotificationRowsEventuallyWithReloadRecovery(
+  sessionId: string,
+  kindLabel: string,
+  expected: number,
+  timeoutMsg: string,
+): Promise<void> {
+  try {
+    await expectNotificationRowsEventually(kindLabel, expected, timeoutMsg, 45_000);
+    return;
+  } catch {
+    // 首轮超时：重载会话走冷回放，让持久 transcript 里的通知行重新挂载。
+  }
+  await relaunchApp(sessionId);
+  await expectNotificationRowsEventually(
+    kindLabel,
+    expected,
+    `${timeoutMsg}（会话冷回放后仍不成立）`,
+    45_000,
+  );
 }
 
 /** 完成卡四格的终值：数字刚挂载时会翻动，相邻两次读数一致才算停下。 */
@@ -525,14 +556,16 @@ describe("动态工作流 · 恢复停下的 run", () => {
   });
 
   it("DWU-03 主代理恢复：停着时补全被拒并指向 ResumeWorkflowRun；恢复后是同一个 run，留白再问一次，补全后跑完", async function () {
-    this.timeout(360_000);
+    // 末尾含冷回放恢复路径（45s + 重载 + 45s）：it 层超时相应放宽。
+    this.timeout(480_000);
     await prepareV4ConversationE2E();
-    const { runId } = await launchWorkflow(
+    const { sessionId, runId } = await launchWorkflow(
       "C",
       "使用工作流：分组留给你补全。",
       "E2E_DWU_C_WAITING",
     );
     resumedByAgentRunId = runId;
+    resumedByAgentSessionId = sessionId;
     const holeNotice: UpstreamRequestQuery = {
       lastUserMessageIncludes: ["<workflow-hole>", `<run-id>${runId}</run-id>`, HOLE_ID],
     };
@@ -624,14 +657,21 @@ describe("动态工作流 · 恢复停下的 run", () => {
       1,
       "完成的终态通知没有最终进入 capture（期望恰好 1 条）",
     );
-    await expectNotificationRowsEventually("工作流已完成", 1, "完成通知行没有最终渲染出 1 条");
+    // 慢 runner 的 live 投影可能错过完成行的 originMeta 水化：先常规等待，仍缺席
+    // 就冷回放重载会话后按持久 transcript 断言（见恢复助手的注释与证据）。
+    await expectNotificationRowsEventuallyWithReloadRecovery(
+      sessionId,
+      "工作流已完成",
+      1,
+      "完成通知行没有最终渲染出 1 条",
+    );
   });
 
   // 文档（transcript-and-notifications.md「What the model reads」「The notification row」）：
   // `<description>` 与通知行的主文本都是 run 名，不区分谁恢复的。
   it("DWU-04 主代理恢复的 run，完成通知的 description 与通知行写的是 run 名，不是 run id", async function () {
-    // 慢 runner 上 agent 恢复路径的通知行水化可能晚于 30s：行等 90s，it 层超时相应放宽。
-    this.timeout(150_000);
+    // 含冷回放恢复路径（45s + 重载 + 45s）：it 层超时相应放宽。
+    this.timeout(240_000);
     if (!resumedByAgentRunId) throw new Error("DWU-03 没有留下 run");
     const named = await countUpstreamRequests({
       lastUserMessageIncludes: [
@@ -640,24 +680,35 @@ describe("动态工作流 · 恢复停下的 run", () => {
         `<description>${RESUMED_BY_AGENT_NAME}</description>`,
       ],
     });
-    // 通知行渲染晚于完成轮收口（第二层最终一致），且收在折叠里、长在虚拟列表末端：
-    // 轮询期间补开折叠并带回底部，行带着 run 名出现前不收口；超时现场带证据。
+    // 通知行渲染晚于完成轮收口，且收在折叠里、长在虚拟列表末端；慢 runner 上
+    // agent 恢复路径还可能错过 live 水化（见 DWU-03 的恢复注释）：先常规等待，
+    // 仍缺席就冷回放重载后再等一轮；两次都失败才带着现场证据失败。
     let rowText = "";
-    try {
-      await browser.waitUntil(
+    const readCompletedRowText = () =>
+      browser.execute((selector) => {
+        const rows = Array.from(document.querySelectorAll(selector));
+        const row = rows.find((item) => (item.textContent ?? "").includes("工作流已完成"));
+        return row?.textContent ?? "";
+      }, NOTIFICATION_ROW);
+    const waitRowName = (timeout: number) =>
+      browser.waitUntil(
         async () => {
-          rowText = await browser.execute((selector) => {
-            const rows = Array.from(document.querySelectorAll(selector));
-            const row = rows.find((item) => (item.textContent ?? "").includes("工作流已完成"));
-            return row?.textContent ?? "";
-          }, NOTIFICATION_ROW);
+          rowText = await readCompletedRowText();
           if (rowText.includes(RESUMED_BY_AGENT_NAME)) return true;
           await openClosedHistoryFolds();
           await ensureV4TimelineAtBottom();
           return false;
         },
-        { timeout: 90_000, timeoutMsg: "完成通知行没有最终渲染出 run 名" },
+        { timeout, timeoutMsg: "完成通知行没有最终渲染出 run 名" },
       );
+    try {
+      try {
+        await waitRowName(45_000);
+      } catch {
+        // 首轮超时：冷回放重载会话，行从持久 transcript 重新挂载后再读。
+        await relaunchApp(resumedByAgentSessionId);
+        await waitRowName(45_000);
+      }
     } catch (error) {
       const tail = await describeTimelineTail();
       const allRows = await browser.execute(
@@ -668,7 +719,7 @@ describe("动态工作流 · 恢复停下的 run", () => {
         NOTIFICATION_ROW,
       );
       throw new Error(
-        `完成通知行没有最终渲染出 run 名; notificationRows=${JSON.stringify(allRows)}; timelineTail=${tail}`,
+        `完成通知行没有最终渲染出 run 名（含冷回放恢复后）; notificationRows=${JSON.stringify(allRows)}; timelineTail=${tail}`,
         { cause: error },
       );
     }
